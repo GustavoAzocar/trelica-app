@@ -106,4 +106,4 @@ Versão atual: **v0.8.0**
 
 ## Licença
 
-Uso acadêmico — PIBIC/UNESC. Contato: stephaneecz@unesc.net
+Uso acadêmico — PIBIC/UNESC.
