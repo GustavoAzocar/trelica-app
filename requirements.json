@@ -1,0 +1,41 @@
+{
+  "_comentario": "Dependências do projeto PIBIC — Otimização de Treliças Planas 2D",
+  "python_minimo": "3.10",
+  "pacotes": [
+    {
+      "nome_exibicao": "NumPy",
+      "import_name":   "numpy",
+      "pip_name":      "numpy",
+      "versao_minima": "1.24",
+      "descricao":     "Operações matriciais e álgebra linear (FEA)"
+    },
+    {
+      "nome_exibicao": "SciPy",
+      "import_name":   "scipy",
+      "pip_name":      "scipy",
+      "versao_minima": "1.10",
+      "descricao":     "Otimizador SLSQP (scipy.optimize.minimize)"
+    },
+    {
+      "nome_exibicao": "Matplotlib",
+      "import_name":   "matplotlib",
+      "pip_name":      "matplotlib",
+      "versao_minima": "3.7",
+      "descricao":     "Visualização gráfica das treliças"
+    },
+    {
+      "nome_exibicao": "Pandas",
+      "import_name":   "pandas",
+      "pip_name":      "pandas",
+      "versao_minima": "2.0",
+      "descricao":     "Tabelas de dados (nós, barras, seções)"
+    },
+    {
+      "nome_exibicao": "tksheet",
+      "import_name":   "tksheet",
+      "pip_name":      "tksheet",
+      "versao_minima": "7.0",
+      "descricao":     "Tabelas editáveis na interface gráfica"
+    }
+  ]
+}
