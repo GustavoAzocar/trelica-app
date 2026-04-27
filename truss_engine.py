@@ -239,7 +239,8 @@ def analise_fea(dados: TrelicaInput) -> dict:
     desloc = np.linalg.solve(Kg, Fg)
 
     # --- Compliance ---
-    W = float(desloc.T @ K_orig @ desloc)
+    # .item() converte array (1,1) para escalar Python (compatível com NumPy ≥ 1.25)
+    W = float((desloc.T @ K_orig @ desloc).item())
 
     # --- Volume ---
     comprimentos = dados.comprimentos()
@@ -279,12 +280,13 @@ def analise_fea(dados: TrelicaInput) -> dict:
         forcas_internas[el] = N
 
     # --- Reações de apoio: R = K_orig·u − F (nos GDLs restritos) ---
-    R_full = K_orig @ desloc - F
+    # ravel() garante vetor 1-D independente do shape de desloc
+    r_vec = np.asarray(K_orig @ desloc - F).ravel()
     reacoes_list = []
-    for k in range(apoios.shape[0]):
+    for k in range(int(apoios.shape[0])):
         no = int(apoios[k, 0])
-        Rx = float(R_full[2*no,   0]) if int(apoios[k, 1]) else 0.0
-        Ry = float(R_full[2*no+1, 0]) if int(apoios[k, 2]) else 0.0
+        Rx = float(r_vec[2*no])   if apoios[k, 1] else 0.0
+        Ry = float(r_vec[2*no+1]) if apoios[k, 2] else 0.0
         reacoes_list.append([no, Rx, Ry])
     reacoes = (np.array(reacoes_list, dtype=float)
                if reacoes_list else np.zeros((0, 3)))
