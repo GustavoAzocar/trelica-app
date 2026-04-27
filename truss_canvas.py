@@ -410,9 +410,9 @@ class TrussCanvas(tk.Canvas):
                              fill='#227722', width=2,
                              arrow=tk.LAST, arrowshape=(10, 12, 4),
                              tags='reaction')
-            self.create_text(sox, soy - 6, text=f'{R_mag/1e3:.1f} kN',
-                             font=('Segoe UI', 7, 'bold'), fill='#227722',
-                             anchor='s', tags='reaction')
+            self.create_text(sox, soy + 4, text=f'{R_mag/1e3:.1f} kN',
+                             font=('Segoe UI', 11, 'bold'), fill='#227722',
+                             anchor='n', tags='reaction')
 
     # ── Colorbar (modo esforcos) ──────────────────────────────────────────────
 
