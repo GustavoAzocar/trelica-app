@@ -449,6 +449,29 @@ class TrussApp(tk.Tk):
         tc.pack(fill='both', expand=True)
         tc.render(modo, dados, resultado)
 
+    def _show_canvas_2v(self, paineis: list):
+        """Exibe 2 TrussCanvas empilhados verticalmente (topo / base)."""
+        self._clear_right()
+        outer = tk.Frame(self.content, bg='#ebebeb')
+        outer.pack(fill='both', expand=True)
+        outer.rowconfigure(0, weight=1)
+        outer.rowconfigure(1, weight=1)
+        outer.columnconfigure(0, weight=1)
+
+        for i, (modo, dados, resultado, titulo) in enumerate(paineis[:2]):
+            cell = tk.Frame(outer, bg='white', bd=1, relief='solid')
+            cell.grid(row=i, column=0, sticky='nsew', padx=3, pady=3)
+            cell.rowconfigure(1, weight=1)
+            cell.columnconfigure(0, weight=1)
+            tk.Label(cell, text=titulo,
+                     font=('Segoe UI', 9, 'bold'),
+                     bg='white', fg='#444444',
+                     anchor='w').grid(row=0, column=0, sticky='ew',
+                                      padx=8, pady=(4, 0))
+            tc = TrussCanvas(cell, bg='white')
+            tc.grid(row=1, column=0, sticky='nsew')
+            tc.render(modo, dados, resultado)
+
     def _show_canvas_comparativo(self, paineis: list):
         """
         Exibe até 4 TrussCanvas em grade 2×2 no painel direito.
@@ -807,8 +830,11 @@ class TrussApp(tk.Tk):
         norma = verificar_barras(dados, res, self._param_norma)
         self.resultado_inicial['norma'] = norma
 
-        # ── Vista principal: esforços axiais (Canvas interativo) ─────────────
-        self._show_canvas('esforcos', dados, res)
+        # ── Vista principal: esforços axiais + deformada (layout vertical) ──
+        self._show_canvas_2v([
+            ('esforcos',  dados, res, 'Esforços Axiais'),
+            ('deformada', dados, res, 'Forma Deformada'),
+        ])
 
         # ── Aba UC por barra (matplotlib) em Toplevel ─────────────────────
         self._mostrar_uc_chart(norma, dados.n_el)
