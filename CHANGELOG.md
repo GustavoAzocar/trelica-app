@@ -308,16 +308,17 @@ Versionamento: `MAJOR.MINOR.PATCH`
 ## Pendências conhecidas / próximas versões
 
 - [ ] Validar cálculos do `truss_norma.py` contra exemplos manuais da NBR (notebook `VALIDACAO_truss_norma.ipynb` criado — aguarda execução)
-- [ ] Corrigir bug REV02: `bounds` (4 vars) incompatível com `x0` (7 vars) — Emily
-- [ ] Implementar restrição de deslocamento nodal máximo
+- [ ] Implementar restrição de deslocamento nodal máximo no otimizador SLSQP
 - [ ] Interface gráfica de lançamento clicável (click-to-connect nas coordenadas)
-- [ ] Snap Fase B: loop iterativo de refinamento geométrico + discreto
-- [ ] Gráficos interativos (mpl_connect pick_event — v2.1)
+- [ ] **Snap Fase B**: otimização geométrica (nós) + snap discreto em loop iterativo — refinamento combinado geometria × perfis de catálogo *(Fase A — snap de áreas contínuas → perfis discretos — já implementada em v0.8–0.9)*
 - [ ] Versão Streamlit (secundário)
+- [x] ~~Corrigir bug REV02: `bounds` (4 vars) incompatível com `x0` (7 vars)~~ — superado pela migração para TRELICA_APP *(app usa variáveis corretas desde v0.3.0)*
+- [x] ~~Gráficos interativos~~ — implementado via **TrussCanvas** (tkinter nativo) com zoom, pan, tooltip e popup; abordagem `mpl_connect` descartada em favor do canvas *(v0.9.0)*
 - [x] ~~Integrar `truss_norma` no botão "Dimensionar Estrutura" da GUI~~ *(v0.6.0)*
-- [x] ~~Catálogo de perfis CHS + snap discreto pós-otimização~~ *(v0.8.0)*
+- [x] ~~Catálogo de perfis CHS + snap discreto pós-otimização (Fase A)~~ *(v0.8.0)*
 - [x] ~~Unidades de entrada cm²/GPa com conversão interna~~ *(v0.8.0)*
+- [x] ~~Dimensionamento com perfis do snap + comparativo visual Otimizado × Snap~~ *(v0.9.0)*
 
 ---
 
-*Gerado em 2026-03-31. Atualizar a cada sessão de desenvolvimento.*
+*Atualizado em 2026-04-27.*
