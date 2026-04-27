@@ -219,6 +219,7 @@ class TrussApp(tk.Tk):
         self.resultado_inicial      = None   # dict de analise_fea
         self.resultado_otimizado    = None   # dict de otimizar
         self._dados_otim_ini        = None   # TrelicaInput no momento da otimização
+        self._res_fea_otimizado     = None   # FEA da estrutura otimizada
         self.resultado_snap         = None   # dict de snap_discreto
         self._sheet_ref: tksheet.Sheet = None
         self._fig_ref: plt.Figure      = None
@@ -445,6 +446,36 @@ class TrussApp(tk.Tk):
         tc = TrussCanvas(self.content)
         tc.pack(fill='both', expand=True)
         tc.render(modo, dados, resultado)
+
+    def _show_canvas_comparativo(self, paineis: list):
+        """
+        Exibe até 4 TrussCanvas em grade 2×2 no painel direito.
+        paineis: lista de (modo, dados, resultado, titulo)
+        """
+        self._clear_right()
+        outer = tk.Frame(self.content, bg='#ebebeb')
+        outer.pack(fill='both', expand=True)
+        outer.rowconfigure(0, weight=1)
+        outer.rowconfigure(1, weight=1)
+        outer.columnconfigure(0, weight=1)
+        outer.columnconfigure(1, weight=1)
+
+        for i, (modo, dados, resultado, titulo) in enumerate(paineis[:4]):
+            r, c = divmod(i, 2)
+            cell = tk.Frame(outer, bg='white', bd=1, relief='solid')
+            cell.grid(row=r, column=c, sticky='nsew', padx=3, pady=3)
+            cell.rowconfigure(1, weight=1)
+            cell.columnconfigure(0, weight=1)
+
+            tk.Label(cell, text=titulo,
+                     font=('Segoe UI', 9, 'bold'),
+                     bg='white', fg='#444444',
+                     anchor='w').grid(row=0, column=0, sticky='ew',
+                                      padx=8, pady=(4, 0))
+
+            tc = TrussCanvas(cell, bg='white')
+            tc.grid(row=1, column=0, sticky='nsew')
+            tc.render(modo, dados, resultado)
 
     def _confirm_bar(self, command, label='Confirmar e Salvar'):
         """Adiciona botão de confirmação na base do painel direito."""
@@ -843,7 +874,7 @@ class TrussApp(tk.Tk):
     # 10 ── Resultados ─────────────────────────────────────────────────────────
 
     def cmd_resultados(self):
-        """Reabre a janela de log/resultados da última otimização."""
+        """Reabre o comparativo 2×2 e a janela de log da última otimização."""
         if self.resultado_otimizado is None or self._dados_otim_ini is None:
             messagebox.showinfo(
                 "Sem resultados",
@@ -851,9 +882,16 @@ class TrussApp(tk.Tk):
                 "Execute 'Otimizar Estrutura' primeiro."
             )
             return
-        V_i = self._dados_otim_ini.volume_total()
-        self._mostrar_log_otimizacao(self.resultado_otimizado, V_i,
-                                     self._dados_otim_ini)
+        dados_ini = self._dados_otim_ini
+        dados_opt = self.resultado_otimizado['dados_otimizados']
+        self._show_canvas_comparativo([
+            ('esforcos', dados_ini, self.resultado_inicial,  'Inicial — Esforços'),
+            ('croqui',   dados_ini, None,                    'Inicial — Croqui'),
+            ('esforcos', dados_opt, self._res_fea_otimizado, 'Otimizado — Esforços'),
+            ('croqui',   dados_opt, None,                    'Otimizado — Croqui'),
+        ])
+        V_i = dados_ini.volume_total()
+        self._mostrar_log_otimizacao(self.resultado_otimizado, V_i, dados_ini)
 
     # 11 ── Snap Discreto ─────────────────────────────────────────────────────
 
@@ -1164,21 +1202,15 @@ class TrussApp(tk.Tk):
         self.resultado_otimizado = res_opt
         dados_opt = res_opt['dados_otimizados']
         res_fea   = analise_fea(dados_opt)
+        self._res_fea_otimizado = res_fea
 
-        # Quatro painéis: inicial esforços/croqui | otimizado esforços/croqui
-        fig, axes = plt.subplots(2, 2, figsize=(14, 9))
-        plotar_trelica(dados,     self.resultado_inicial,
-                       titulo='Inicial — Esforços',     ax=axes[0, 0])
-        plotar_trelica(dados,
-                       titulo='Inicial — Croqui',       ax=axes[0, 1],
-                       mostrar_elementos=False, mostrar_forcas=False)
-        plotar_trelica(dados_opt, res_fea,
-                       titulo='Otimizado — Esforços',   ax=axes[1, 0])
-        plotar_trelica(dados_opt,
-                       titulo='Otimizado — Croqui',     ax=axes[1, 1],
-                       mostrar_elementos=False, mostrar_forcas=False)
-        fig.tight_layout(pad=2.5)
-        self._show_figure(fig)
+        # Quatro painéis Canvas 2×2: esforços e croqui, inicial e otimizado
+        self._show_canvas_comparativo([
+            ('esforcos', dados,     self.resultado_inicial, 'Inicial — Esforços'),
+            ('croqui',   dados,     None,                   'Inicial — Croqui'),
+            ('esforcos', dados_opt, res_fea,                'Otimizado — Esforços'),
+            ('croqui',   dados_opt, None,                   'Otimizado — Croqui'),
+        ])
 
         # Métricas comparativas
         V_i  = dados.volume_total()
