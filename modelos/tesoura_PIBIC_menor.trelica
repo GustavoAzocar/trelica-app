@@ -1,0 +1,274 @@
+{
+  "nos": [
+    {
+      "id_no": 0,
+      "x": 0.0,
+      "y": 0.0
+    },
+    {
+      "id_no": 1,
+      "x": 0.0,
+      "y": 1.0
+    },
+    {
+      "id_no": 2,
+      "x": 1.25,
+      "y": 0.0
+    },
+    {
+      "id_no": 3,
+      "x": 1.25,
+      "y": 1.0625
+    },
+    {
+      "id_no": 4,
+      "x": 2.5,
+      "y": 0.0
+    },
+    {
+      "id_no": 5,
+      "x": 2.5,
+      "y": 1.125
+    },
+    {
+      "id_no": 6,
+      "x": 3.75,
+      "y": 0.0
+    },
+    {
+      "id_no": 7,
+      "x": 3.75,
+      "y": 1.1875
+    },
+    {
+      "id_no": 8,
+      "x": 5.0,
+      "y": 0.0
+    },
+    {
+      "id_no": 9,
+      "x": 5.0,
+      "y": 1.25
+    },
+    {
+      "id_no": 10,
+      "x": 6.25,
+      "y": 0.0
+    },
+    {
+      "id_no": 11,
+      "x": 6.25,
+      "y": 1.3125
+    }
+  ],
+  "barras": [
+    {
+      "id_barra": 0,
+      "no_inicio": 0,
+      "no_fim": 2,
+      "id_secao": 0,
+      "descricao": "banzo inferior"
+    },
+    {
+      "id_barra": 1,
+      "no_inicio": 1,
+      "no_fim": 3,
+      "id_secao": 0,
+      "descricao": "banzo superior"
+    },
+    {
+      "id_barra": 2,
+      "no_inicio": 2,
+      "no_fim": 4,
+      "id_secao": 0,
+      "descricao": "banzo inferior"
+    },
+    {
+      "id_barra": 3,
+      "no_inicio": 3,
+      "no_fim": 5,
+      "id_secao": 0,
+      "descricao": "banzo superior"
+    },
+    {
+      "id_barra": 4,
+      "no_inicio": 4,
+      "no_fim": 6,
+      "id_secao": 0,
+      "descricao": "banzo inferior"
+    },
+    {
+      "id_barra": 5,
+      "no_inicio": 5,
+      "no_fim": 7,
+      "id_secao": 0,
+      "descricao": "banzo superior"
+    },
+    {
+      "id_barra": 6,
+      "no_inicio": 6,
+      "no_fim": 8,
+      "id_secao": 0,
+      "descricao": "banzo inferior"
+    },
+    {
+      "id_barra": 7,
+      "no_inicio": 7,
+      "no_fim": 9,
+      "id_secao": 0,
+      "descricao": "banzo superior"
+    },
+    {
+      "id_barra": 8,
+      "no_inicio": 8,
+      "no_fim": 10,
+      "id_secao": 0,
+      "descricao": "banzo inferior"
+    },
+    {
+      "id_barra": 9,
+      "no_inicio": 9,
+      "no_fim": 11,
+      "id_secao": 0,
+      "descricao": "banzo superior"
+    },
+    {
+      "id_barra": 10,
+      "no_inicio": 0,
+      "no_fim": 1,
+      "id_secao": 1,
+      "descricao": "montante"
+    },
+    {
+      "id_barra": 11,
+      "no_inicio": 2,
+      "no_fim": 3,
+      "id_secao": 1,
+      "descricao": "montante"
+    },
+    {
+      "id_barra": 12,
+      "no_inicio": 4,
+      "no_fim": 5,
+      "id_secao": 1,
+      "descricao": "montante"
+    },
+    {
+      "id_barra": 13,
+      "no_inicio": 6,
+      "no_fim": 7,
+      "id_secao": 1,
+      "descricao": "montante"
+    },
+    {
+      "id_barra": 14,
+      "no_inicio": 8,
+      "no_fim": 9,
+      "id_secao": 1,
+      "descricao": "montante"
+    },
+    {
+      "id_barra": 15,
+      "no_inicio": 10,
+      "no_fim": 11,
+      "id_secao": 1,
+      "descricao": "montante"
+    },
+    {
+      "id_barra": 16,
+      "no_inicio": 0,
+      "no_fim": 3,
+      "id_secao": 2,
+      "descricao": "diagonal"
+    },
+    {
+      "id_barra": 17,
+      "no_inicio": 2,
+      "no_fim": 5,
+      "id_secao": 2,
+      "descricao": "diagonal"
+    },
+    {
+      "id_barra": 18,
+      "no_inicio": 4,
+      "no_fim": 7,
+      "id_secao": 2,
+      "descricao": "diagonal"
+    },
+    {
+      "id_barra": 19,
+      "no_inicio": 6,
+      "no_fim": 9,
+      "id_secao": 2,
+      "descricao": "diagonal"
+    },
+    {
+      "id_barra": 20,
+      "no_inicio": 8,
+      "no_fim": 11,
+      "id_secao": 2,
+      "descricao": "diagonal"
+    }
+  ],
+  "secoes": [
+    {
+      "id_secao": 0,
+      "area_cm2": 5.18,
+      "E_GPa": 210.0
+    },
+    {
+      "id_secao": 1,
+      "area_cm2": 5.18,
+      "E_GPa": 210.0
+    },
+    {
+      "id_secao": 2,
+      "area_cm2": 5.18,
+      "E_GPa": 210.0
+    }
+  ],
+  "forcas": [
+    {
+      "id_no": 1,
+      "Fx_N": 0.0,
+      "Fy_N": -6257.8076232814965
+    },
+    {
+      "id_no": 3,
+      "Fx_N": 0.0,
+      "Fy_N": -12515.615246562993
+    },
+    {
+      "id_no": 5,
+      "Fx_N": 0.0,
+      "Fy_N": -12515.615246562993
+    },
+    {
+      "id_no": 7,
+      "Fx_N": 0.0,
+      "Fy_N": -12515.615246562993
+    },
+    {
+      "id_no": 9,
+      "Fx_N": 0.0,
+      "Fy_N": -12515.615246562993
+    },
+    {
+      "id_no": 11,
+      "Fx_N": 0.0,
+      "Fy_N": -6257.8076232814965
+    }
+  ],
+  "apoios": [
+    {
+      "id_no": 0,
+      "restrito_x": 1,
+      "restrito_y": 1
+    },
+    {
+      "id_no": 10,
+      "restrito_x": 0,
+      "restrito_y": 1
+    }
+  ]
+}
