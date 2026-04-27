@@ -222,9 +222,9 @@ class TrussCanvas(tk.Canvas):
                 self,
                 variable=self._var_escala,
                 from_=1, to=to_val,
-                orient='horizontal',
-                length=240,
-                label='Amplificação (×)',
+                orient='vertical',
+                length=180,
+                label='× amp.',
                 command=lambda _: self._on_escala_change(),
                 bg='#f0f0f0',
                 highlightthickness=0,
@@ -239,8 +239,8 @@ class TrussCanvas(tk.Canvas):
     def _place_escala_slider(self):
         W = max(self.winfo_width(),  200)
         H = max(self.winfo_height(), 200)
-        self.create_window(W // 2, H - 6, window=self._scale_widget,
-                           anchor='s', tags='slider_win')
+        self.create_window(W - 6, H // 2, window=self._scale_widget,
+                           anchor='e', tags='slider_win')
 
     def _on_escala_change(self):
         if self._modo == 'deformada' and self._var_escala:

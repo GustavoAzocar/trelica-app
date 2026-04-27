@@ -320,9 +320,8 @@ class TrussApp(tk.Tk):
                 ("7  Visualizar Completa",    self.cmd_visualizar_completa,  None),
             ],
             [
-                ("8  Dimensionar Estrutura",  self.cmd_dimensionar,          None),
-                ("    ↳ Deformada",           self.cmd_visualizar_deformada, None),
-                ("9  Otimizar Estrutura",     self.cmd_otimizar,             None),
+                ("8  Dimensionar Estrutura",  self.cmd_dimensionar,  None),
+                ("9  Otimizar Estrutura",     self.cmd_otimizar,     None),
                 ("10  Resultados",            self.cmd_resultados,     None),
                 ("11  Snap Discreto",         self.cmd_snap_discreto,  None),
             ],
