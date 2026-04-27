@@ -1119,6 +1119,13 @@ class TrussApp(tk.Tk):
             self._set_status("Erro no dimensionamento snap.")
             return
 
+        # Mapa área → designação CHS para exibição na legenda do croqui
+        res_fea['perfis_snap'] = {
+            round(float(a), 8): d
+            for a, d in zip(dados_disc.areas,
+                            resultado_snap['perfis_por_barra'])
+        }
+
         self._res_fea_snap = res_fea
         win.destroy()
 
@@ -1135,7 +1142,7 @@ class TrussApp(tk.Tk):
             ('esforcos', dados_opt,  self._res_fea_otimizado, 'Otimizado — Esforços'),
             ('croqui',   dados_opt,  None,                    'Otimizado — Croqui'),
             ('esforcos', dados_disc, res_fea,                 'Snap Discreto — Esforços'),
-            ('croqui',   dados_disc, None,                    'Snap Discreto — Croqui'),
+            ('croqui',   dados_disc, res_fea,                 'Snap Discreto — Croqui'),
         ])
 
     # ── Catálogo de perfis ────────────────────────────────────────────────────

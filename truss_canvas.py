@@ -398,15 +398,16 @@ class TrussCanvas(tk.Canvas):
 
     def _draw_secoes_legend(self):
         unique_a, color_map = self._secoes_info()
-        n   = len(unique_a)
-        W   = max(self.winfo_width(), 200)
+        n          = len(unique_a)
+        W          = max(self.winfo_width(), 200)
+        perfis_map = (self._resultado or {}).get('perfis_snap', {})
+        has_perfis = bool(perfis_map)
 
-        sw  = 14   # largura do swatch
-        sh  = 10   # altura do swatch
-        pad = 6
-        lh  = 18   # altura de linha
-
-        box_w = 110
+        sw    = 14
+        sh    = 10
+        pad   = 6
+        lh    = 26 if has_perfis else 18
+        box_w = 148 if has_perfis else 110
         box_h = pad + 14 + n * lh + pad
         x0    = W - box_w - 8
         y0    = 12
@@ -420,15 +421,28 @@ class TrussCanvas(tk.Canvas):
                          tags='legend')
 
         for i, a in enumerate(unique_a):
-            cor = color_map[a]
-            ry  = y0 + pad + 14 + i * lh
-            sx  = x0 + pad
+            cor   = color_map[a]
+            ry    = y0 + pad + 14 + i * lh
+            sx    = x0 + pad
+            desig = perfis_map.get(round(float(a), 8), '')
+
             self.create_rectangle(sx, ry, sx + sw, ry + sh,
                                   fill=cor, outline='', tags='legend')
-            self.create_text(sx + sw + 4, ry + sh // 2,
-                             text=f'{a * 1e4:.2f} cm²',
-                             font=('Segoe UI', 8), fill='#333333',
-                             anchor='w', tags='legend')
+
+            if desig:
+                self.create_text(sx + sw + 4, ry,
+                                 text=desig,
+                                 font=('Segoe UI', 8, 'bold'), fill='#333333',
+                                 anchor='nw', tags='legend')
+                self.create_text(sx + sw + 4, ry + 14,
+                                 text=f'{a * 1e4:.2f} cm²',
+                                 font=('Segoe UI', 7), fill='#666666',
+                                 anchor='nw', tags='legend')
+            else:
+                self.create_text(sx + sw + 4, ry + sh // 2,
+                                 text=f'{a * 1e4:.2f} cm²',
+                                 font=('Segoe UI', 8), fill='#333333',
+                                 anchor='w', tags='legend')
 
     # ── Comprimentos de barra (modo croqui) ──────────────────────────────────
 
