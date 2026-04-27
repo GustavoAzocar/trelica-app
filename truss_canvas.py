@@ -169,13 +169,16 @@ class TrussCanvas(tk.Canvas):
                              font=('Segoe UI', 7), fill='#b0b0b0',
                              anchor='s', tags='grid')
 
-        for y in np.unique(np.round(nos[:, 1], 5)):
+        ys_uni = np.unique(np.round(nos[:, 1], 5))
+        for i, y in enumerate(ys_uni):
             _, sy = self._w2s(0, y)
             self.create_line(0, sy, W, sy,
                              fill='#e0e0e0', dash=(3, 5), tags='grid')
-            self.create_text(8, sy, text=f'y={y:.2f}',
-                             font=('Segoe UI', 7), fill='#b0b0b0',
-                             anchor='w', tags='grid')
+            # Label só no primeiro e no último nível Y
+            if i == 0 or i == len(ys_uni) - 1:
+                self.create_text(8, sy, text=f'y={y:.2f}',
+                                 font=('Segoe UI', 7), fill='#b0b0b0',
+                                 anchor='w', tags='grid')
 
     # ── Barras ───────────────────────────────────────────────────────────────
 
@@ -256,7 +259,7 @@ class TrussCanvas(tk.Canvas):
         nos  = self._dados.nos
         span = max(nos[:, 0].max() - nos[:, 0].min(),
                    nos[:, 1].max() - nos[:, 1].min(), 1.0)
-        t    = span * 0.05
+        t    = span * 0.025
 
         for k in range(self._dados.apoios.shape[0]):
             no = int(self._dados.apoios[k, 0])
@@ -399,16 +402,17 @@ class TrussCanvas(tk.Canvas):
             dx     = (Rx / R_mag) * escala * ratio
             dy     = (Ry / R_mag) * escala * ratio
 
-            sox, soy = self._w2s(px,      py)
-            sex, sey = self._w2s(px + dx, py + dy)
+            # Cauda fora da estrutura → ponta no nó
+            sox, soy = self._w2s(px - dx, py - dy)   # cauda (fora)
+            sex, sey = self._w2s(px,      py)          # ponta (no nó)
 
             self.create_line(sox, soy, sex, sey,
                              fill='#227722', width=2,
                              arrow=tk.LAST, arrowshape=(10, 12, 4),
                              tags='reaction')
-            self.create_text(sex + 5, sey, text=f'{R_mag/1e3:.1f} kN',
+            self.create_text(sox, soy - 6, text=f'{R_mag/1e3:.1f} kN',
                              font=('Segoe UI', 7, 'bold'), fill='#227722',
-                             anchor='w', tags='reaction')
+                             anchor='s', tags='reaction')
 
     # ── Colorbar (modo esforcos) ──────────────────────────────────────────────
 
