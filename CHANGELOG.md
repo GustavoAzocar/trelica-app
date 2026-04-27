@@ -10,6 +10,18 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.9.2] — 2026-04-27
+
+### Adicionado
+- **`truss_canvas.py` — `_lookup_perfil(a_m2)`**: busca o perfil CHS Vallourec de área mais próxima no catálogo; carregamento lazy com cache por instância (zero custo em redraws subsequentes); retorna `''` se catálogo indisponível
+- **Legenda de seções** — denominação CHS em **todos** os modos croqui:
+  - Prioridade 1: perfil exato do snap (`perfis_snap` em `resultado`)
+  - Prioridade 2: lookup por proximidade de área no catálogo Vallourec
+  - Layout de duas linhas: designação bold (ex: `TC 38,1×3,6`) + `X.XX cm²` em cinza; `box_w` e `lh` se ajustam automaticamente
+- **`truss_gui.py` — `_aceitar_snap()`**: adiciona `res_fea['perfis_snap']` (dict `{round(area,8): designação}`) e passa `res_fea` também no painel `'Snap Discreto — Croqui'` do comparativo
+
+---
+
 ## [0.9.1] — 2026-04-27
 
 ### Adicionado
@@ -326,10 +338,32 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ## Pendências conhecidas / próximas versões
 
+### GUI
 - [ ] **Tooltip na deformada**: no modo `'deformada'`, o hit-test deve checar contra as posições **deformadas** dos nós (atualmente checa a posição original); ao hover exibir: nó, δx, δy (mm) e δ_total = √(δx²+δy²) mm; implementação: `_hit_test()` recebe `nos_def` quando modo é `'deformada'`
-- [ ] Validar cálculos do `truss_norma.py` contra exemplos manuais da NBR (notebook `VALIDACAO_truss_norma.ipynb` criado — aguarda execução)
-- [ ] Implementar restrição de deslocamento nodal máximo no otimizador SLSQP
+- [ ] **Catálogo de perfis — ordenação por coluna**: clicar no cabeçalho de qualquer coluna da Treeview deve ordenar os perfis do menor para o maior (e reverter no segundo clique); colunas numéricas (D, t, A, m, r…) requerem ordenação numérica, não lexicográfica
+- [ ] **Catálogo de perfis — inserir área por clique**: duplo-clique (ou botão "Usar este perfil") em uma linha do catálogo deve inserir a área do perfil selecionado (coluna `A_cm2`) e o módulo E padrão na tabela de seções, preenchendo a linha selecionada/nova; requer referência ao `sheet_sec` dentro de `_abrir_catalogo_perfis()`
 - [ ] Interface gráfica de lançamento clicável (click-to-connect nas coordenadas)
+
+### Engine / Norma
+- [ ] **Flambagem local — CHS (NBR 16239:2013 / NBR 8800:2024)**: o `truss_norma.py` implementa apenas instabilidade **global** (fator χ via λo); a verificação de flambagem **local** da parede do perfil (relação D/t) **não está implementada**
+  - NBR 8800:2024 Tab. 5.2 / NBR 16239:2013 Seção 6.2 classificam CHS por esbeltez da parede: `λp = 0,07·E/fy` (compacta), `λr = 0,15·E/fy` (não-compacta/esbelta)
+  - Para CHS em compressão: `D/t ≤ 0,15·E/fy` é o limite da seção não-esbelta; acima disso redução adicional de `Nc,Rd`
+  - Para CHS em flexão (futuro): limite `D/t ≤ 0,07·E/fy` para seção compacta
+  - Implementação sugerida: nova função `_fator_reducao_local_chs(D_t, fy, E)` retornando fator Ql ∈ (0,1]; `Nc_Rd` e `verificar_barras` passam a multiplicar por Ql; `ParamNorma.beta_td` já carrega t/D — calcular D/t = 1/(2·beta_td) quando `A` e `D` precisarem ser reconstituídos
+  - Alertas: quando `D/t > 0,15·E/fy` emitir aviso de "seção esbelta — flambagem local governa"
+- [ ] **Validação normativa**: executar `VALIDACAO_truss_norma.ipynb` com exemplos manuais da NBR — em especial os cálculos de `Nc_Rd`, χ e esbeltez reduzida λo (notebook criado, aguarda execução)
+
+### Otimizador
+- [ ] **Otimização de forma e topologia — GUI**: o engine (`truss_engine.py`) **já suporta** `otimizar_geometria=True` e `nos_geometria_livre` em `ConfigOtimizacao`, mas a GUI fixa `otimizar_geometria=False` e nunca expõe essa funcionalidade
+  - Implementar na aba de otimização: lista de nós com checkbox "livre/fixo" para selecionar os nós internos que o otimizador pode mover; campos de bound X e Y por nó (ou global relativo à posição inicial)
+  - Modo "shape": otimização simultânea de áreas + coordenadas dos nós livres
+  - Modo "topologia" (avançado): remover barras com área → 0 em pós-processamento
+- [ ] **Restrição de deformação máxima — δ_adm = L/n**: atualmente não existe nenhuma restrição de deslocamento no otimizador; implementar como constraint SLSQP `max(|u|) ≤ δ_adm`
+  - GUI: campo "Deslocamento máximo admissível" com formato `L / n` (usuário informa `n`, ex: 250, 300, 500); L = vão total calculado automaticamente
+  - Engine: novo campo `restricao_deformacao_max: float = None` em `ConfigOtimizacao`; constraint `δ_adm − max(|deslocamentos|) ≥ 0` adicionada em `otimizar()`
+  - Exibir na interface o δ_max calculado vs. δ_adm após dimensionamento
+
+### Roadmaps
 - [ ] **Snap Fase B**: otimização geométrica (nós) + snap discreto em loop iterativo — refinamento combinado geometria × perfis de catálogo *(Fase A — snap de áreas contínuas → perfis discretos — já implementada em v0.8–0.9)*
   > **Roteiro de implementação:**
   > 1. Ponto de partida: `dados_snap` (TrelicaInput com áreas discretas da Fase A)
