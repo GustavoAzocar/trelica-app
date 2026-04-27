@@ -320,8 +320,9 @@ class TrussApp(tk.Tk):
                 ("7  Visualizar Completa",    self.cmd_visualizar_completa,  None),
             ],
             [
-                ("8  Dimensionar Estrutura",  self.cmd_dimensionar,    None),
-                ("9  Otimizar Estrutura",     self.cmd_otimizar,       None),
+                ("8  Dimensionar Estrutura",  self.cmd_dimensionar,          None),
+                ("    ↳ Deformada",           self.cmd_visualizar_deformada, None),
+                ("9  Otimizar Estrutura",     self.cmd_otimizar,             None),
                 ("10  Resultados",            self.cmd_resultados,     None),
                 ("11  Snap Discreto",         self.cmd_snap_discreto,  None),
             ],
@@ -838,6 +839,26 @@ class TrussApp(tk.Tk):
             + f"\nBarras reprovadas: {reprovadas} / {n_el}"
             + alertas_txt
             + "\n\nSalvo como benchmark para a otimização."
+        )
+
+    def cmd_visualizar_deformada(self):
+        """Exibe a forma deformada da estrutura (requer dimensionamento prévio)."""
+        if self.resultado_inicial is None:
+            messagebox.showinfo(
+                "Deformada",
+                "Execute '8 Dimensionar Estrutura' antes de visualizar a deformada."
+            )
+            return
+        dados = self._montar_trelica()
+        if dados is None:
+            return
+        self._show_canvas('deformada', dados, self.resultado_inicial)
+        u_max_mm = float(
+            abs(self.resultado_inicial['deslocamentos']).max()
+        ) * 1e3
+        self._set_status(
+            f"Deformada — δ_max = {u_max_mm:.4f} mm  |  "
+            "Use o slider para ajustar a amplificação visual."
         )
 
     def _mostrar_uc_chart(self, norma, n_el: int):

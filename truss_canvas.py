@@ -15,9 +15,12 @@ Modos de renderização
                  números de nós e barras; barras coloridas e com
                  espessura proporcional por seção (área única)
     'completa' — croqui + setas de força com labels em kN
-    'esforcos' — barras coloridas por N (azul = tração / vermelho = compressão),
-                 espessura proporcional ao esforço, apoios, reações (se disponíveis),
-                 números de barras, grid, colorbar
+    'esforcos'  — barras coloridas por N (azul = tração / vermelho = compressão),
+                  espessura proporcional ao esforço, apoios, reações (se disponíveis),
+                  números de barras, grid, colorbar
+    'deformada' — ghost cinza (posição original) + estrutura deslocada em azul;
+                  setas laranja do nó original ao deformado; slider de amplificação
+                  com valor inicial auto-calculado (δ_max ≈ 15 % do vão)
 """
 
 import math
@@ -86,6 +89,11 @@ class TrussCanvas(tk.Canvas):
         self._resultado = None
         self._modo      = None
 
+        # Slider de amplificação (modo deformada)
+        self._var_escala       = None
+        self._scale_widget     = None
+        self._escala_deformada = 1.0
+
         # Transformação afim: mundo (m) → tela (px)
         self._scale = 1.0
         self._ox    = 0.0   # offset X
@@ -111,6 +119,16 @@ class TrussCanvas(tk.Canvas):
         self._modo      = modo
         self._dados     = dados
         self._resultado = resultado
+
+        if modo == 'deformada' and resultado and 'deslocamentos' in resultado:
+            u     = np.asarray(resultado['deslocamentos']).ravel()
+            max_u = float(np.abs(u).max())
+            nos   = dados.nos
+            span  = max(nos[:, 0].max() - nos[:, 0].min(),
+                        nos[:, 1].max() - nos[:, 1].min(), 1e-6)
+            auto  = max(1, int((span * 0.15) / max_u) if max_u > 1e-12 else 100)
+            self._init_escala_slider(auto)
+
         self.update_idletasks()
         self._fit_view()
         self._redraw()
@@ -169,17 +187,22 @@ class TrussCanvas(tk.Canvas):
             return
         self.delete('all')
         self._draw_grid()
-        self._draw_bars()
-        if self._modo == 'croqui':
-            self._draw_bar_lengths()
-            self._draw_secoes_legend()
-        self._draw_supports()
-        self._draw_nodes()
-        if self._modo == 'completa':
-            self._draw_forces()
-        if self._modo == 'esforcos':
-            self._draw_reactions()
-            self._draw_colorbar()
+        if self._modo == 'deformada':
+            self._draw_deformada()
+            self._draw_supports()
+            self._place_escala_slider()
+        else:
+            self._draw_bars()
+            if self._modo == 'croqui':
+                self._draw_bar_lengths()
+                self._draw_secoes_legend()
+            self._draw_supports()
+            self._draw_nodes()
+            if self._modo == 'completa':
+                self._draw_forces()
+            if self._modo == 'esforcos':
+                self._draw_reactions()
+                self._draw_colorbar()
         self._draw_expand_hint()
 
     def _draw_expand_hint(self):
@@ -188,6 +211,105 @@ class TrussCanvas(tk.Canvas):
         self.create_text(W - 6, H - 6, text='⤢',
                          font=('Segoe UI', 9), fill='#cccccc',
                          anchor='se', tags='expand_hint')
+
+    # ── Slider de amplificação (modo deformada) ───────────────────────────────
+
+    def _init_escala_slider(self, auto: int):
+        to_val = max(auto * 5, 500)
+        if self._scale_widget is None:
+            self._var_escala   = tk.IntVar(value=auto)
+            self._scale_widget = tk.Scale(
+                self,
+                variable=self._var_escala,
+                from_=1, to=to_val,
+                orient='horizontal',
+                length=240,
+                label='Amplificação (×)',
+                command=lambda _: self._on_escala_change(),
+                bg='#f0f0f0',
+                highlightthickness=0,
+                troughcolor='#d0d0d0',
+                font=('Segoe UI', 7),
+            )
+        else:
+            self._var_escala.set(auto)
+            self._scale_widget.config(to=to_val)
+        self._escala_deformada = float(auto)
+
+    def _place_escala_slider(self):
+        W = max(self.winfo_width(),  200)
+        H = max(self.winfo_height(), 200)
+        self.create_window(W // 2, H - 6, window=self._scale_widget,
+                           anchor='s', tags='slider_win')
+
+    def _on_escala_change(self):
+        if self._modo == 'deformada' and self._var_escala:
+            self._escala_deformada = float(self._var_escala.get())
+            self._redraw()
+
+    # ── Deformada ─────────────────────────────────────────────────────────────
+
+    def _draw_deformada(self):
+        if not self._resultado or 'deslocamentos' not in self._resultado:
+            return
+        nos   = self._dados.nos
+        conec = self._dados.conectividade
+        u     = np.asarray(self._resultado['deslocamentos']).ravel()
+        esc   = self._escala_deformada
+        r     = self._NR
+
+        # Nós deformados
+        nos_def = nos.copy()
+        for i in range(self._dados.n_nos):
+            nos_def[i, 0] = nos[i, 0] + esc * float(u[2 * i])
+            nos_def[i, 1] = nos[i, 1] + esc * float(u[2 * i + 1])
+
+        # Ghost: estrutura original (cinza tracejado)
+        for el in range(self._dados.n_el):
+            no1, no2 = conec[el]
+            self.create_line(*self._w2s(*nos[no1]), *self._w2s(*nos[no2]),
+                             fill='#cccccc', width=1.5, dash=(5, 4),
+                             tags='ghost')
+        for i in range(self._dados.n_nos):
+            sx, sy = self._w2s(*nos[i])
+            self.create_oval(sx - r + 1, sy - r + 1, sx + r - 1, sy + r - 1,
+                             fill='#dddddd', outline='', tags='ghost')
+
+        # Setas de deslocamento: original → deformado
+        for i in range(self._dados.n_nos):
+            ox, oy = self._w2s(*nos[i])
+            dx, dy = self._w2s(*nos_def[i])
+            if math.hypot(dx - ox, dy - oy) > 4:
+                self.create_line(ox, oy, dx, dy,
+                                 fill='#E65100', width=1.2, dash=(2, 3),
+                                 arrow=tk.LAST, arrowshape=(6, 8, 3),
+                                 tags='disp_arrow')
+
+        # Barras deformadas (azul sólido)
+        for el in range(self._dados.n_el):
+            no1, no2 = conec[el]
+            self.create_line(*self._w2s(*nos_def[no1]),
+                             *self._w2s(*nos_def[no2]),
+                             fill='#1565C0', width=2.5,
+                             capstyle='round', tags='deformed')
+
+        # Nós deformados
+        for i in range(self._dados.n_nos):
+            sx, sy = self._w2s(*nos_def[i])
+            self.create_oval(sx - r, sy - r, sx + r, sy + r,
+                             fill='#1565C0', outline='white', width=1,
+                             tags='deformed')
+            self.create_text(sx + r + 3, sy - r - 2, text=str(i),
+                             font=('Segoe UI', 8, 'bold'), fill='#1565C0',
+                             tags='deformed')
+
+        # Anotação: δ_max e fator de amplificação
+        u_max_mm = float(np.abs(u).max()) * 1e3
+        W = max(self.winfo_width(), 200)
+        self.create_text(W // 2, 14, anchor='n',
+                         text=f'δ_max = {u_max_mm:.4f} mm   |   amplificação ×{int(esc)}',
+                         font=('Segoe UI', 9, 'bold'), fill='#333333',
+                         tags='def_info')
 
     # ── Grid ─────────────────────────────────────────────────────────────────
 
