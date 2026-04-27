@@ -94,6 +94,9 @@ class TrussCanvas(tk.Canvas):
         self._scale_widget     = None
         self._escala_deformada = 1.0
 
+        # Cache do catálogo CHS para lookup na legenda
+        self._catalogo_cache = None
+
         # Transformação afim: mundo (m) → tela (px)
         self._scale = 1.0
         self._ox    = 0.0   # offset X
@@ -347,6 +350,20 @@ class TrussCanvas(tk.Canvas):
                      for i, a in enumerate(unique_a)}
         return unique_a, color_map
 
+    def _lookup_perfil(self, a_m2: float) -> str:
+        """Retorna a designação CHS do perfil mais próximo por área (com cache)."""
+        if self._catalogo_cache is None:
+            try:
+                from truss_catalogo import carregar_catalogo
+                self._catalogo_cache = carregar_catalogo()
+            except Exception:
+                self._catalogo_cache = False   # falhou — não tenta de novo
+        cat = self._catalogo_cache
+        if cat is False or cat is None:
+            return ''
+        idx = (cat['A_m2'] - a_m2).abs().idxmin()
+        return str(cat.loc[idx, 'designacao'])
+
     # ── Barras ───────────────────────────────────────────────────────────────
 
     def _draw_bars(self):
@@ -400,8 +417,10 @@ class TrussCanvas(tk.Canvas):
         unique_a, color_map = self._secoes_info()
         n          = len(unique_a)
         W          = max(self.winfo_width(), 200)
-        perfis_map = (self._resultado or {}).get('perfis_snap', {})
-        has_perfis = bool(perfis_map)
+        perfis_map  = (self._resultado or {}).get('perfis_snap', {})
+        # Determina se haverá linha de denominação (snap exato ou catálogo disponível)
+        has_perfis  = bool(perfis_map) or bool(self._lookup_perfil(
+            float(self._dados.areas[0])))
 
         sw    = 14
         sh    = 10
@@ -424,7 +443,9 @@ class TrussCanvas(tk.Canvas):
             cor   = color_map[a]
             ry    = y0 + pad + 14 + i * lh
             sx    = x0 + pad
-            desig = perfis_map.get(round(float(a), 8), '')
+            # Prioridade: snap exato → lookup catálogo → só área
+            desig = (perfis_map.get(round(float(a), 8), '')
+                     or self._lookup_perfil(float(a)))
 
             self.create_rectangle(sx, ry, sx + sw, ry + sh,
                                   fill=cor, outline='', tags='legend')
