@@ -278,6 +278,17 @@ def analise_fea(dados: TrelicaInput) -> dict:
         tensoes[el]         = sigma
         forcas_internas[el] = N
 
+    # --- Reações de apoio: R = K_orig·u − F (nos GDLs restritos) ---
+    R_full = K_orig @ desloc - F
+    reacoes_list = []
+    for k in range(apoios.shape[0]):
+        no = int(apoios[k, 0])
+        Rx = float(R_full[2*no,   0]) if int(apoios[k, 1]) else 0.0
+        Ry = float(R_full[2*no+1, 0]) if int(apoios[k, 2]) else 0.0
+        reacoes_list.append([no, Rx, Ry])
+    reacoes = (np.array(reacoes_list, dtype=float)
+               if reacoes_list else np.zeros((0, 3)))
+
     return {
         'compliance':      W,
         'volume':          vol,
@@ -285,6 +296,7 @@ def analise_fea(dados: TrelicaInput) -> dict:
         'forcas_internas': forcas_internas,
         'tensoes':         tensoes,
         'deformacoes':     deformacoes,
+        'reacoes':         reacoes,
         'K_global':        K_orig,
     }
 

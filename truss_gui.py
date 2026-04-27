@@ -121,6 +121,7 @@ import tksheet
 
 from truss_input import dataframes_vazios, dataframes_para_trelica
 from truss_engine import analise_fea, plotar_trelica, otimizar, ConfigOtimizacao
+from truss_canvas import TrussCanvas
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -438,6 +439,13 @@ class TrussApp(tk.Tk):
         canvas.draw()
         canvas.get_tk_widget().pack(fill='both', expand=True, padx=4, pady=4)
 
+    def _show_canvas(self, modo: str, dados, resultado: dict = None):
+        """Exibe TrussCanvas interativo no painel direito."""
+        self._clear_right()
+        tc = TrussCanvas(self.content)
+        tc.pack(fill='both', expand=True)
+        tc.render(modo, dados, resultado)
+
     def _confirm_bar(self, command, label='Confirmar e Salvar'):
         """Adiciona botão de confirmação na base do painel direito."""
         ttk.Button(self.content, text=label, command=command
@@ -590,14 +598,9 @@ class TrussApp(tk.Tk):
         if dados is None:
             return
 
-        fig, ax = plt.subplots(figsize=(11, 4.5))
-        plotar_trelica(dados, titulo='Croqui Geométrico — conferência de lançamento',
-                       ax=ax,
-                       mostrar_elementos=False,
-                       mostrar_forcas=False)
-        fig.tight_layout()
-        self._show_figure(fig)
-        self._set_status("Croqui geométrico gerado — nós, barras e apoios (sem carregamento).")
+        self._show_canvas('croqui', dados)
+        self._set_status("Croqui geométrico — passe o mouse sobre nós/barras para detalhes. "
+                         "Roda = zoom | arrastar = pan.")
 
     # 5 ── Verificar Estaticidade ──────────────────────────────────────────────
 
@@ -743,13 +746,9 @@ class TrussApp(tk.Tk):
         if dados is None:
             return
 
-        fig, ax = plt.subplots(figsize=(12, 5))
-        plotar_trelica(dados, titulo='Estrutura Completa — cargas, apoios e seções',
-                       ax=ax, mostrar_elementos=True,
-                       mostrar_forcas=True, mostrar_apoios=True)
-        fig.tight_layout()
-        self._show_figure(fig)
-        self._set_status("Estrutura completa visualizada — pronta para verificação manual.")
+        self._show_canvas('completa', dados)
+        self._set_status("Estrutura completa com cargas — passe o mouse sobre nós/barras. "
+                         "Roda = zoom | arrastar = pan.")
 
     # 8 ── Dimensionar Estrutura ───────────────────────────────────────────────
 
@@ -775,41 +774,11 @@ class TrussApp(tk.Tk):
         norma = verificar_barras(dados, res, self._param_norma)
         self.resultado_inicial['norma'] = norma
 
-        # ── Figura: croqui + esforços + UC por barra ──────────────────────
-        fig = plt.figure(figsize=(13, 11))
-        ax1 = fig.add_subplot(3, 1, 1)
-        ax2 = fig.add_subplot(3, 1, 2)
-        ax3 = fig.add_subplot(3, 1, 3)
+        # ── Vista principal: esforços axiais (Canvas interativo) ─────────────
+        self._show_canvas('esforcos', dados, res)
 
-        plotar_trelica(dados, titulo='Croqui geométrico',
-                       ax=ax1, mostrar_elementos=False, mostrar_forcas=False)
-        plotar_trelica(dados, res,
-                       titulo='Esforços axiais  (azul = tração | vermelho = compressão)',
-                       ax=ax2)
-
-        # Gráfico de barras: taxa de utilização (UC) por barra
-        n_el  = dados.n_el
-        barras_idx = range(n_el)
-        UC    = norma['UC_max']
-        cores = ['#d62728' if uc > 1.0 else '#2ca02c' if uc < 0.8
-                 else '#ff7f0e' for uc in UC]
-        ax3.bar(barras_idx, UC, color=cores, edgecolor='none', width=0.8)
-        ax3.axhline(1.0, color='red',    lw=1.5, ls='--', label='Limite (UC=1,0)')
-        ax3.axhline(0.8, color='orange', lw=1.0, ls=':',  label='Alerta (UC=0,8)')
-        ax3.set_xlabel('Barra')
-        ax3.set_ylabel('Taxa de utilização (UC)')
-        ax3.set_title(
-            f'Verificação normativa — NBR 8800:2024 / NBR 16239:2013'
-            f'  |  UC máximo = {norma["UC_global"]:.3f}'
-            + ('  ✓ OK' if norma['UC_global'] <= 1.0 else '  ✗ REPROVADO'),
-            fontsize=9)
-        ax3.set_xlim(-0.5, n_el - 0.5)
-        ax3.set_ylim(0, max(UC.max() * 1.15, 1.1))
-        ax3.legend(fontsize=8)
-        ax3.grid(axis='y', alpha=0.3)
-
-        fig.tight_layout(pad=2.0)
-        self._show_figure(fig)
+        # ── Aba UC por barra (matplotlib) em Toplevel ─────────────────────
+        self._mostrar_uc_chart(norma, dados.n_el)
 
         # ── Alertas de esbeltez ───────────────────────────────────────────
         alertas_txt = ''
@@ -838,6 +807,36 @@ class TrussApp(tk.Tk):
             + alertas_txt
             + "\n\nSalvo como benchmark para a otimização."
         )
+
+    def _mostrar_uc_chart(self, norma, n_el: int):
+        """Abre Toplevel com gráfico de barras de UC por barra (matplotlib)."""
+        top = tk.Toplevel(self.root)
+        top.title("Taxa de Utilização por Barra")
+        top.geometry("750x340")
+
+        fig, ax = plt.subplots(figsize=(9, 3.5))
+        UC    = norma['UC_max']
+        cores = ['#d62728' if uc > 1.0 else '#2ca02c' if uc < 0.8
+                 else '#ff7f0e' for uc in UC]
+        ax.bar(range(n_el), UC, color=cores, edgecolor='none', width=0.8)
+        ax.axhline(1.0, color='red',    lw=1.5, ls='--', label='Limite (UC=1,0)')
+        ax.axhline(0.8, color='orange', lw=1.0, ls=':',  label='Alerta (UC=0,8)')
+        ax.set_xlabel('Barra')
+        ax.set_ylabel('UC')
+        ax.set_title(
+            f'Verificação NBR 8800 / NBR 16239  —  UC máx = {norma["UC_global"]:.3f}'
+            + ('  ✓ OK' if norma['UC_global'] <= 1.0 else '  ✗ REPROVADO'),
+            fontsize=9)
+        ax.set_xlim(-0.5, n_el - 0.5)
+        ax.set_ylim(0, max(float(UC.max()) * 1.15, 1.1))
+        ax.legend(fontsize=8)
+        ax.grid(axis='y', alpha=0.3)
+        fig.tight_layout()
+
+        cv = FigureCanvasTkAgg(fig, master=top)
+        cv.draw()
+        cv.get_tk_widget().pack(fill='both', expand=True)
+        top.protocol('WM_DELETE_WINDOW', lambda: (plt.close(fig), top.destroy()))
 
     # 9 ── Otimizar Estrutura ──────────────────────────────────────────────────
 
