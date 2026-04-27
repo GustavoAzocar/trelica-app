@@ -311,6 +311,14 @@ Versionamento: `MAJOR.MINOR.PATCH`
 - [ ] Implementar restrição de deslocamento nodal máximo no otimizador SLSQP
 - [ ] Interface gráfica de lançamento clicável (click-to-connect nas coordenadas)
 - [ ] **Snap Fase B**: otimização geométrica (nós) + snap discreto em loop iterativo — refinamento combinado geometria × perfis de catálogo *(Fase A — snap de áreas contínuas → perfis discretos — já implementada em v0.8–0.9)*
+  > **Roteiro de implementação:**
+  > 1. Ponto de partida: `dados_snap` (TrelicaInput com áreas discretas da Fase A)
+  > 2. **Loop até convergência** (critério: variação de volume < ε entre iterações):
+  >    - a. Otimização geométrica — SLSQP com `otimizar_geometria=True`, áreas fixas nos valores discretos atuais; variáveis = coordenadas X/Y dos nós internos; restrições UC ≤ 1,0 (`ConfigOtimizacao.usar_restricoes_norma=True`)
+  >    - b. Snap discreto — com a nova geometria, re-executa Fase A para cada grupo: re-calcula comprimentos de flambagem e re-seleciona o menor perfil CHS com UC ≤ 1,0
+  >    - c. Verifica convergência — se os perfis não mudaram E o volume variou < ε → encerra
+  > 3. Saída: TrelicaInput com geometria otimizada **e** áreas discretas do catálogo
+  > **Desafios principais:** acoplamento não-suave entre geometria e perfis (mudança de perfil é um salto discreto); o SLSQP pode oscilar se o snap trocar perfis a cada iteração — avaliar uso de relaxação ou limite de avanço de perfil por iteração.
 - [ ] Versão Streamlit (secundário)
 - [x] ~~Corrigir bug REV02: `bounds` (4 vars) incompatível com `x0` (7 vars)~~ — superado pela migração para TRELICA_APP *(app usa variáveis corretas desde v0.3.0)*
 - [x] ~~Gráficos interativos~~ — implementado via **TrussCanvas** (tkinter nativo) com zoom, pan, tooltip e popup; abordagem `mpl_connect` descartada em favor do canvas *(v0.9.0)*
