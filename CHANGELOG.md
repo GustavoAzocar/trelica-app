@@ -10,6 +10,25 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.9.1] — 2026-04-27
+
+### Adicionado
+- **`truss_canvas.py` — modo `'deformada'`**: nova vista de forma deformada da estrutura
+  - Ghost cinza tracejado (posição original) + barras azuis sólidas (posição deformada)
+  - Setas laranja tracejadas do nó original ao nó deformado (exibidas quando deslocamento é visível na escala atual)
+  - Anotação no topo: `δ_max = X.XXXX mm | amplificação ×N`
+  - Slider vertical `tk.Scale` embutido via `create_window()` na lateral direita do canvas (escala 1 → max(auto×5, 500))
+  - Escala inicial auto-calculada: δ_max visual ≈ 15 % do vão da estrutura (legível por padrão sem ajuste manual)
+  - Zero custo computacional — reutiliza os deslocamentos já calculados pelo FEA
+- **`truss_gui.py` — `_show_canvas_2v(paineis)`**: layout vertical com 2 TrussCanvas empilhados (peso igual, títulos individuais)
+- **`truss_gui.py` — `cmd_dimensionar()`**: passa a exibir layout 2v com **Esforços Axiais** (topo) + **Forma Deformada** (base) automaticamente após o dimensionamento
+
+### Alterado
+- Slider de amplificação: `orient='vertical'`, posicionado na lateral direita (`anchor='e'`), label compacta `'× amp.'`
+- Botão `'↳ Deformada'` removido do painel esquerdo — a deformada agora aparece automaticamente no resultado do dimensionamento
+
+---
+
 ## [0.9.0] — 2026-04-27
 
 ### Adicionado
@@ -307,6 +326,7 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ## Pendências conhecidas / próximas versões
 
+- [ ] **Tooltip na deformada**: no modo `'deformada'`, o hit-test deve checar contra as posições **deformadas** dos nós (atualmente checa a posição original); ao hover exibir: nó, δx, δy (mm) e δ_total = √(δx²+δy²) mm; implementação: `_hit_test()` recebe `nos_def` quando modo é `'deformada'`
 - [ ] Validar cálculos do `truss_norma.py` contra exemplos manuais da NBR (notebook `VALIDACAO_truss_norma.ipynb` criado — aguarda execução)
 - [ ] Implementar restrição de deslocamento nodal máximo no otimizador SLSQP
 - [ ] Interface gráfica de lançamento clicável (click-to-connect nas coordenadas)
