@@ -10,6 +10,43 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.9.0] — 2026-04-27
+
+### Adicionado
+- **`truss_canvas.py`** — novo módulo de renderização interativa (substituiu matplotlib nas vistas estruturais):
+  - `TrussCanvas(tk.Canvas)` — widget com zoom (roda), pan (arrastar), tooltip por hover e popup por duplo clique (janela 1050×700 px)
+  - Ícone `⤢` no canto inferior direito sinaliza o popup ao usuário
+  - **Modo `croqui`**: barras coloridas por grupo de seção (`_PALETA_SECOES`, 10 cores), espessura proporcional à área; legenda lateral com swatch + valor em cm²; comprimentos de barra em label perpendicular à barra; grid X/Y (labels Y apenas no 1.º e último nível)
+  - **Modo `completa`**: croqui + setas de força laranja (cauda→nó), labels em kN com anti-sobreposição perpendicular
+  - **Modo `esforcos`**: barras coloridas por N axial (azul = tração / vermelho = compressão), espessura proporcional; apoios; reações verdes (cauda fora da estrutura, ponta no nó) com label bold; colorbar com gradiente + labels de valor e legenda "tração / compressão"
+  - `_secoes_info()` — retorna `(unique_areas, {area → cor})` sem ambiguidade de float
+  - `_draw_expand_hint()` — ícone discreto sempre visível no canto do canvas
+
+- **`truss_gui.py`** — integração TrussCanvas e fluxo snap:
+  - `_show_canvas(modo, dados, resultado)` — substitui `_show_matplotlib` nas etapas 4, 7 e 8
+  - `_show_canvas_comparativo(paineis)` — grade 2×2 de TrussCanvas com título por célula; células com `weight=1` para distribuição igual de espaço
+  - Botão **"✔ Aceitar e Dimensionar com Snap"** no rodapé da janela de snap discreto: executa `analise_fea` + `verificar_barras` com `dados_discretos`; fecha a janela e exibe comparativo 2×2 **Otimizado Contínuo vs Snap Discreto** (esforços + croqui de cada)
+  - `_aceitar_snap(resultado_snap, win)` — handler do botão acima; resultado armazenado em `self._res_fea_snap`
+
+### Alterado
+- **Colorbar de esforços** — labels aprimorados: valor em kN bold + "tração" (itálico azul) no topo; "compressão" (itálico vermelho) + valor na base; ambos com âncora correta (`nw` / `sw`)
+- **Convenção de cor confirmada**: N > 0 = tração → azul; N < 0 = compressão → vermelho (convenção NBR padrão: extensão positiva)
+- **Apoios** reduzidos para `t = span × 0.025` (eram `0.05`) — não invadem a geometria
+- **Reações** — seta com `arrow=tk.LAST`, cauda fora da estrutura; label posicionado na cauda com `anchor='n'`, fonte 11 pt
+- **Grid Y** — labels apenas no 1.º e último nível quando há mais de 2 níveis distintos (evita aglutinação)
+
+### Corrigido
+- **`truss_engine.py`** — erro NumPy ≥ 1.25 *"only 0-dimensional arrays can be converted"*: `W = float((desloc.T @ K_orig @ desloc).item())`
+- **`truss_engine.py` — `analise_fea()`** — passa a retornar chave `'reacoes'` (array `[no, Rx, Ry]`) calculada via `r_vec = np.asarray(K_orig @ desloc − F).ravel()`; permite exibição das reações no canvas sem nova chamada FEA
+- **Tooltip barra** — label "Tração / Compressão" corrigido para N ≥ 0 = Tração (alinhado à convenção do engine)
+
+### Pendências resolvidas nesta versão
+- [x] ~~Gráficos interativos (canvas nativo tkinter com zoom/pan/tooltip)~~
+- [x] ~~Comparativo visual inicial × otimizado com canvas~~
+- [x] ~~Dimensionamento com perfis do snap discreto e comparativo visual~~
+
+---
+
 ## [0.8.0] — 2026-04-20
 
 ### Adicionado

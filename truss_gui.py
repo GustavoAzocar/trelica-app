@@ -221,6 +221,7 @@ class TrussApp(tk.Tk):
         self._dados_otim_ini        = None   # TrelicaInput no momento da otimização
         self._res_fea_otimizado     = None   # FEA da estrutura otimizada
         self.resultado_snap         = None   # dict de snap_discreto
+        self._res_fea_snap          = None   # FEA da estrutura snap-discreta
         self._sheet_ref: tksheet.Sheet = None
         self._fig_ref: plt.Figure      = None
 
@@ -1045,6 +1046,51 @@ class TrussApp(tk.Tk):
             f"Iterações snap: {n_iter}   |   "
             f"Barras reprovadas: {n_repr}"
         ), font=('Segoe UI', 9)).pack(anchor='w')
+
+        # ── Botão de aceite ─────────────────────────────────────────────────
+        btn_frame = ttk.Frame(win)
+        btn_frame.pack(fill='x', padx=10, pady=(2, 10))
+        ttk.Button(
+            btn_frame,
+            text="✔  Aceitar e Dimensionar com Snap",
+            command=lambda: self._aceitar_snap(resultado, win),
+        ).pack(side='right')
+
+    def _aceitar_snap(self, resultado_snap, win):
+        """Roda FEA + norma com as áreas discretas do snap e exibe comparativo."""
+        from truss_norma import verificar_barras
+
+        dados_disc = resultado_snap['dados_discretos']
+
+        self._set_status("Dimensionando com perfis do snap — aguarde...")
+        self.update_idletasks()
+        try:
+            res_fea = analise_fea(dados_disc)
+            norma   = verificar_barras(dados_disc, res_fea, self._param_norma)
+            res_fea['norma'] = norma
+        except Exception as e:
+            messagebox.showerror("Erro — Snap Dimensionamento", str(e))
+            self._set_status("Erro no dimensionamento snap.")
+            return
+
+        self._res_fea_snap = res_fea
+        win.destroy()
+
+        n_repr = int((norma['UC_max'] > 1.0).sum())
+        UC_max = float(norma['UC_max'].max())
+        self._set_status(
+            f"Snap dimensionado — UC_max: {UC_max:.3f}  |  "
+            f"Barras reprovadas: {n_repr}  |  "
+            f"Vol: {dados_disc.volume_total()*1e6:.1f} cm³"
+        )
+
+        dados_opt = self.resultado_otimizado['dados_otimizados']
+        self._show_canvas_comparativo([
+            ('esforcos', dados_opt,  self._res_fea_otimizado, 'Otimizado — Esforços'),
+            ('croqui',   dados_opt,  None,                    'Otimizado — Croqui'),
+            ('esforcos', dados_disc, res_fea,                 'Snap Discreto — Esforços'),
+            ('croqui',   dados_disc, None,                    'Snap Discreto — Croqui'),
+        ])
 
     # ── Catálogo de perfis ────────────────────────────────────────────────────
 

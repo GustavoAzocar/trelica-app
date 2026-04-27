@@ -5,13 +5,15 @@ Renderizador interativo de treliças usando tkinter Canvas.
 
 Classe pública
 --------------
-    TrussCanvas  — widget Canvas com zoom (roda), pan (arrastar) e
-                   tooltips por hover em nós e barras.
+    TrussCanvas  — widget Canvas com zoom (roda), pan (arrastar),
+                   tooltips por hover em nós e barras e popup por
+                   duplo clique.
 
 Modos de renderização
 ---------------------
     'croqui'   — geometria, apoios, grid, comprimentos de barra,
-                 números de nós e barras
+                 números de nós e barras; barras coloridas e com
+                 espessura proporcional por seção (área única)
     'completa' — croqui + setas de força com labels em kN
     'esforcos' — barras coloridas por N (azul = tração / vermelho = compressão),
                  espessura proporcional ao esforço, apoios, reações (se disponíveis),
@@ -31,10 +33,10 @@ def _axial_color(N: float, N_max: float) -> str:
     if N_max < 1e-12:
         return '#4477aa'
     t = max(-1.0, min(1.0, N / N_max))
-    if t >= 0:        # tração → azul
+    if t >= 0:        # tração (N > 0) → azul
         v = int(255 * (1.0 - t * 0.85))
         return f'#{v:02x}{v:02x}ff'
-    else:             # compressão → vermelho
+    else:             # compressão (N < 0) → vermelho
         v = int(255 * (1.0 + t * 0.85))
         return f'#ff{v:02x}{v:02x}'
 
@@ -52,6 +54,13 @@ def _pt_seg_dist(px, py, ax, ay, bx, by) -> float:
         return math.hypot(px - ax, py - ay)
     t = max(0.0, min(1.0, ((px - ax)*dx + (py - ay)*dy) / (dx*dx + dy*dy)))
     return math.hypot(px - ax - t*dx, py - ay - t*dy)
+
+
+# Paleta discreta para identificar seções transversais distintas
+_PALETA_SECOES = [
+    '#2196F3', '#F44336', '#4CAF50', '#FF9800', '#9C27B0',
+    '#00BCD4', '#FF5722', '#607D8B', '#E91E63', '#795548',
+]
 
 
 # ---------------------------------------------------------------------------
@@ -86,14 +95,15 @@ class TrussCanvas(tk.Canvas):
         self._pan_sx = 0;  self._pan_sy = 0
         self._pan_ox = 0.0; self._pan_oy = 0.0
 
-        self.bind('<Configure>',     self._on_resize)
-        self.bind('<MouseWheel>',    self._on_zoom)
-        self.bind('<Button-4>',      self._on_zoom)     # Linux scroll up
-        self.bind('<Button-5>',      self._on_zoom)     # Linux scroll down
-        self.bind('<ButtonPress-1>', self._on_pan_start)
-        self.bind('<B1-Motion>',     self._on_pan)
-        self.bind('<Motion>',        self._on_hover)
-        self.bind('<Leave>',         self._hide_tip)
+        self.bind('<Configure>',        self._on_resize)
+        self.bind('<MouseWheel>',       self._on_zoom)
+        self.bind('<Button-4>',         self._on_zoom)       # Linux scroll up
+        self.bind('<Button-5>',         self._on_zoom)       # Linux scroll down
+        self.bind('<ButtonPress-1>',    self._on_pan_start)
+        self.bind('<B1-Motion>',        self._on_pan)
+        self.bind('<Motion>',           self._on_hover)
+        self.bind('<Leave>',            self._hide_tip)
+        self.bind('<Double-Button-1>',  self._open_popup)
 
     # ── API pública ──────────────────────────────────────────────────────────
 
@@ -136,6 +146,22 @@ class TrussCanvas(tk.Canvas):
         self._ox = W / 2 - cx * self._scale
         self._oy = H * 0.22 - y_min * self._scale  # 22 % de margem inferior
 
+    # ── Popup ampliado ───────────────────────────────────────────────────────
+
+    def _open_popup(self, _event=None):
+        if self._dados is None:
+            return
+        nomes = {'croqui': 'Croqui', 'completa': 'Estrutura com Cargas',
+                 'esforcos': 'Esforços Axiais'}
+        titulo = nomes.get(self._modo, self._modo)
+        top = tk.Toplevel(self.winfo_toplevel())
+        top.title(f'Vista Ampliada — {titulo}')
+        top.geometry('1050x720')
+        top.configure(bg='white')
+        tc = TrussCanvas(top, bg='white')
+        tc.pack(fill='both', expand=True, padx=4, pady=4)
+        tc.render(self._modo, self._dados, self._resultado)
+
     # ── Redraw completo ───────────────────────────────────────────────────────
 
     def _redraw(self):
@@ -146,6 +172,7 @@ class TrussCanvas(tk.Canvas):
         self._draw_bars()
         if self._modo == 'croqui':
             self._draw_bar_lengths()
+            self._draw_secoes_legend()
         self._draw_supports()
         self._draw_nodes()
         if self._modo == 'completa':
@@ -153,6 +180,14 @@ class TrussCanvas(tk.Canvas):
         if self._modo == 'esforcos':
             self._draw_reactions()
             self._draw_colorbar()
+        self._draw_expand_hint()
+
+    def _draw_expand_hint(self):
+        W = max(self.winfo_width(), 200)
+        H = max(self.winfo_height(), 200)
+        self.create_text(W - 6, H - 6, text='⤢',
+                         font=('Segoe UI', 9), fill='#cccccc',
+                         anchor='se', tags='expand_hint')
 
     # ── Grid ─────────────────────────────────────────────────────────────────
 
@@ -180,6 +215,16 @@ class TrussCanvas(tk.Canvas):
                                  font=('Segoe UI', 7), fill='#b0b0b0',
                                  anchor='w', tags='grid')
 
+    # ── Helpers de seção ─────────────────────────────────────────────────────
+
+    def _secoes_info(self):
+        """Retorna (unique_areas_m2, {area_m2: cor}) para o dados atual."""
+        areas    = self._dados.areas
+        unique_a = np.unique(np.round(areas, 12))
+        color_map = {a: _PALETA_SECOES[i % len(_PALETA_SECOES)]
+                     for i, a in enumerate(unique_a)}
+        return unique_a, color_map
+
     # ── Barras ───────────────────────────────────────────────────────────────
 
     def _draw_bars(self):
@@ -191,13 +236,29 @@ class TrussCanvas(tk.Canvas):
         N_max = (float(np.abs(N).max()) if N is not None and np.abs(N).max() > 0
                  else 1.0)
 
+        # Pré-calcula mapa de cores por seção para modo croqui
+        if self._modo == 'croqui':
+            unique_a, color_map = self._secoes_info()
+            a_min  = float(unique_a.min())
+            a_max  = float(unique_a.max())
+            a_span = max(a_max - a_min, 1e-20)
+
         for el in range(self._dados.n_el):
             no1, no2 = conec[el]
             sx1, sy1 = self._w2s(*nos[no1])
             sx2, sy2 = self._w2s(*nos[no2])
 
-            cor = _axial_color(N[el], N_max) if N is not None else '#4477aa'
-            lw  = _axial_width(N[el], N_max) if N is not None else 2.0
+            if N is not None:
+                cor = _axial_color(N[el], N_max)
+                lw  = _axial_width(N[el], N_max)
+            elif self._modo == 'croqui':
+                a     = float(self._dados.areas[el])
+                a_key = unique_a[int(np.argmin(np.abs(unique_a - a)))]
+                cor   = color_map[a_key]
+                lw    = 1.5 + 3.5 * (a - a_min) / a_span
+            else:
+                cor = '#4477aa'
+                lw  = 2.0
 
             self.create_line(sx1, sy1, sx2, sy2,
                              fill=cor, width=lw,
@@ -210,6 +271,42 @@ class TrussCanvas(tk.Canvas):
             self.create_text(mx, my, text=str(el),
                              font=('Segoe UI', 7), fill='#888888',
                              tags='bar_lbl')
+
+    # ── Legenda de seções (modo croqui) ──────────────────────────────────────
+
+    def _draw_secoes_legend(self):
+        unique_a, color_map = self._secoes_info()
+        n   = len(unique_a)
+        W   = max(self.winfo_width(), 200)
+
+        sw  = 14   # largura do swatch
+        sh  = 10   # altura do swatch
+        pad = 6
+        lh  = 18   # altura de linha
+
+        box_w = 110
+        box_h = pad + 14 + n * lh + pad
+        x0    = W - box_w - 8
+        y0    = 12
+
+        self.create_rectangle(x0, y0, x0 + box_w, y0 + box_h,
+                              fill='#f8f8f8', outline='#cccccc',
+                              width=1, tags='legend')
+        self.create_text(x0 + box_w // 2, y0 + pad,
+                         text='Seções', anchor='n',
+                         font=('Segoe UI', 8, 'bold'), fill='#444444',
+                         tags='legend')
+
+        for i, a in enumerate(unique_a):
+            cor = color_map[a]
+            ry  = y0 + pad + 14 + i * lh
+            sx  = x0 + pad
+            self.create_rectangle(sx, ry, sx + sw, ry + sh,
+                                  fill=cor, outline='', tags='legend')
+            self.create_text(sx + sw + 4, ry + sh // 2,
+                             text=f'{a * 1e4:.2f} cm²',
+                             font=('Segoe UI', 8), fill='#333333',
+                             anchor='w', tags='legend')
 
     # ── Comprimentos de barra (modo croqui) ──────────────────────────────────
 
@@ -443,15 +540,28 @@ class TrussCanvas(tk.Canvas):
         N_t = float(N.max())
         N_c = float(N.min())
         lx  = x0 + bw + 4
-        self.create_text(lx, y0,         anchor='w', tags='colorbar',
+
+        # Topo: tração
+        self.create_text(lx, y0,      anchor='nw', tags='colorbar',
                          text=f'+{N_t/1e3:.1f} kN',
                          font=('Segoe UI', 7), fill='#2244cc')
+        self.create_text(lx, y0 + 11, anchor='nw', tags='colorbar',
+                         text='tração',
+                         font=('Segoe UI', 6, 'italic'), fill='#2244cc')
+
+        # Centro: zero
         self.create_text(lx, y0 + bh//2, anchor='w', tags='colorbar',
                          text='0',
                          font=('Segoe UI', 7), fill='#555555')
-        self.create_text(lx, y0 + bh,    anchor='w', tags='colorbar',
+
+        # Base: compressão
+        self.create_text(lx, y0 + bh - 11, anchor='sw', tags='colorbar',
+                         text='compressão',
+                         font=('Segoe UI', 6, 'italic'), fill='#cc2222')
+        self.create_text(lx, y0 + bh,      anchor='sw', tags='colorbar',
                          text=f'{N_c/1e3:.1f} kN',
                          font=('Segoe UI', 7), fill='#cc2222')
+
         self.create_text(x0 + bw//2, y0 - 10, anchor='s', tags='colorbar',
                          text='N axial',
                          font=('Segoe UI', 8, 'bold'), fill='#444444')

@@ -100,7 +100,7 @@ Nós → Barras/Seções → Apoios → Carregamento
 ## Versionamento
 
 Veja [CHANGELOG.md](CHANGELOG.md) para o histórico completo de versões.  
-Versão atual: **v0.8.0**
+Versão atual: **v0.9.0**
 
 ---
 
