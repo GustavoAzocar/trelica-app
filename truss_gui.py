@@ -388,13 +388,13 @@ class TrussApp(tk.Tk):
     def _show_two_sheets(self,
                          df_top: pd.DataFrame, titulo_top: str,
                          df_bot: pd.DataFrame, titulo_bot: str,
-                         btn_top_extra: tuple = None,
+                         btn_top_extra=None,
                          ) -> tuple:
         """
         Dois tksheets empilhados num PanedWindow. Retorna (sheet_top, sheet_bot).
 
-        btn_top_extra : (texto, comando) — botão opcional alinhado à direita
-                        no cabeçalho do painel superior.
+        btn_top_extra : (texto, comando) ou lista de (texto, comando) —
+                        botões opcionais alinhados à direita no cabeçalho superior.
         """
         self._clear_right()
 
@@ -409,8 +409,10 @@ class TrussApp(tk.Tk):
                       font=('Segoe UI', 10, 'bold')
                       ).pack(side='left')
             if btn_extra:
-                ttk.Button(frm_tit, text=btn_extra[0], command=btn_extra[1]
-                           ).pack(side='right', padx=4)
+                extras = btn_extra if isinstance(btn_extra, list) else [btn_extra]
+                for _txt, _cmd in extras:
+                    ttk.Button(frm_tit, text=_txt, command=_cmd
+                               ).pack(side='right', padx=4)
             data = _df_to_rows(df) if not df.empty else []
             data += [[''] * len(df.columns) for _ in range(4)]
             s = tksheet.Sheet(parent, data=data, headers=list(df.columns),
@@ -578,8 +580,13 @@ class TrussApp(tk.Tk):
                 'descricao define o grupo para snap discreto: '
                 'Banzo inferior | Banzo superior | Diagonal | Montante'
             ),
-            btn_top_extra=('Ver Catálogo de Perfis', self._abrir_catalogo_perfis),
+            btn_top_extra=[
+                ('Ver Catálogo', self._abrir_catalogo_perfis),
+                ('Inserir do Catálogo', lambda: self._abrir_catalogo_perfis(
+                    on_select=self._inserir_perfil_na_secao)),
+            ],
         )
+        self._sheet_secoes = sheet_sec
 
         btn_f = ttk.Frame(self.content)
         btn_f.pack(pady=4)
@@ -1147,8 +1154,14 @@ class TrussApp(tk.Tk):
 
     # ── Catálogo de perfis ────────────────────────────────────────────────────
 
-    def _abrir_catalogo_perfis(self):
-        """Abre janela com o catálogo CHS Vallourec, com filtros por diâmetro."""
+    def _abrir_catalogo_perfis(self, on_select=None):
+        """Abre janela com o catálogo CHS Vallourec.
+
+        on_select : callable(row_dict) | None
+            Se fornecido, habilita seleção por duplo-clique; recebe dict com
+            todas as colunas do catálogo. Fácil de adaptar: mude apenas o que
+            _inserir_perfil_na_secao faz com o dict, sem tocar aqui.
+        """
         import tkinter as tk
         from tkinter import ttk
         from truss_catalogo import carregar_catalogo
@@ -1161,7 +1174,7 @@ class TrussApp(tk.Tk):
 
         win = tk.Toplevel(self)
         win.title("Catálogo de Perfis — CHS Vallourec")
-        win.geometry("900x520")
+        win.geometry("900x540")
 
         # Filtro por diâmetro
         frm_fil = ttk.Frame(win)
@@ -1182,18 +1195,42 @@ class TrussApp(tk.Tk):
         frm_tree.pack(fill='both', expand=True, padx=8, pady=4)
 
         tree = ttk.Treeview(frm_tree, columns=cols, show='headings')
-        for c, h in zip(cols, hdrs):
-            tree.heading(c, text=h)
-            tree.column(c, width=85, anchor='center')
         tree.column('designacao', width=130, anchor='w')
+        for c in cols:
+            tree.column(c, width=85, anchor='center')
+        tree.column('designacao', width=130, anchor='w')   # reafirma após loop
 
         vsb = ttk.Scrollbar(frm_tree, orient='vertical', command=tree.yview)
         tree.configure(yscrollcommand=vsb.set)
         tree.pack(side='left', fill='both', expand=True)
         vsb.pack(side='right', fill='y')
 
+        # Ordenação por coluna — estado por coluna (False = crescente)
+        _sort_rev: dict = {}
+
+        def _sort_col(col):
+            rev = not _sort_rev.get(col, False)
+            _sort_rev[col] = rev
+            data = [(tree.set(child, col), child) for child in tree.get_children('')]
+            try:
+                data.sort(key=lambda t: float(str(t[0]).replace(',', '.')), reverse=rev)
+            except ValueError:
+                data.sort(key=lambda t: str(t[0]).lower(), reverse=rev)
+            for i, (_, child) in enumerate(data):
+                tree.move(child, '', i)
+            arrow = ' ↓' if rev else ' ↑'
+            for c, h in zip(cols, hdrs):
+                tree.heading(c, text=(h + arrow) if c == col else h,
+                             command=lambda cc=c: _sort_col(cc))
+
+        for c, h in zip(cols, hdrs):
+            tree.heading(c, text=h, command=lambda cc=c: _sort_col(cc))
+
         def _preencher(d_filter='Todos'):
             tree.delete(*tree.get_children())
+            _sort_rev.clear()
+            for c, h in zip(cols, hdrs):
+                tree.heading(c, text=h, command=lambda cc=c: _sort_col(cc))
             df = cat if d_filter == 'Todos' else cat[cat['d_mm'] == float(d_filter)]
             for _, row in df.iterrows():
                 tree.insert('', 'end', values=(
@@ -1211,10 +1248,49 @@ class TrussApp(tk.Tk):
         cb.bind('<<ComboboxSelected>>', lambda _e: _preencher(diam_var.get()))
         _preencher()
 
-        ttk.Label(win,
+        # Seleção por duplo-clique (só quando on_select fornecido)
+        if on_select is not None:
+            def _on_double(event):
+                sel = tree.selection()
+                if not sel:
+                    return
+                vals = tree.item(sel[0])['values']
+                if vals:
+                    on_select(dict(zip(cols, vals)))
+                    win.destroy()
+
+            tree.bind('<Double-Button-1>', _on_double)
+
+        frm_rod = ttk.Frame(win)
+        frm_rod.pack(fill='x', padx=8, pady=(0, 6))
+        ttk.Label(frm_rod,
                   text=f"Total: {len(cat)} perfis  |  Fonte: Vallourec — Tubos Estruturais (TC)",
                   font=('Segoe UI', 8), foreground='gray'
-                  ).pack(anchor='w', padx=8, pady=(0, 6))
+                  ).pack(side='left')
+        if on_select is not None:
+            ttk.Label(frm_rod,
+                      text="Duplo-clique para inserir na tabela de seções",
+                      font=('Segoe UI', 8, 'italic'), foreground='#336699'
+                      ).pack(side='right')
+
+    def _inserir_perfil_na_secao(self, row: dict):
+        """Insere um perfil do catálogo na tabela de seções.
+
+        Recebe o dict completo da linha selecionada — chaves: designacao, d_mm,
+        t_mm, m_kg_m, A_cm2, r_cm, I_cm4, W_cm3, U_m2m.
+        Para mudar o que é inserido (área, espessura, designação…), edite
+        apenas esta função; _abrir_catalogo_perfis não precisa ser tocada.
+        """
+        sheet = getattr(self, '_sheet_secoes', None)
+        if sheet is None:
+            return
+        area_cm2 = float(str(row.get('A_cm2', '0')).replace(',', '.'))
+        data = [list(r) for r in sheet.get_sheet_data()]
+        for idx, r in enumerate(data):
+            if not any(c not in ('', None) for c in r):
+                sheet.set_row_data(idx, [idx + 1, f'{area_cm2:.2f}', '200.0'])
+                return
+        sheet.insert_row(values=[len(data) + 1, f'{area_cm2:.2f}', '200.0'])
 
     def cmd_otimizar(self):
         if self.resultado_inicial is None:

@@ -737,7 +737,47 @@ class TrussCanvas(tk.Canvas):
         nos   = self._dados.nos
         conec = self._dados.conectividade
 
-        # Nós têm prioridade
+        # Modo deformada: hit-test contra posições amplificadas
+        if (self._modo == 'deformada'
+                and self._resultado
+                and 'deslocamentos' in self._resultado):
+            u       = np.asarray(self._resultado['deslocamentos']).ravel()
+            esc     = self._escala_deformada
+            nos_hit = nos.copy()
+            for i in range(self._dados.n_nos):
+                nos_hit[i, 0] = nos[i, 0] + esc * float(u[2 * i])
+                nos_hit[i, 1] = nos[i, 1] + esc * float(u[2 * i + 1])
+
+            for i in range(self._dados.n_nos):
+                cx, cy = self._w2s(*nos_hit[i])
+                if math.hypot(sx - cx, sy - cy) < self._HIT:
+                    ux = float(u[2*i])     * 1e3
+                    uy = float(u[2*i + 1]) * 1e3
+                    ut = math.hypot(ux, uy)
+                    return '\n'.join([
+                        f'Nó {i}',
+                        f'δx = {ux:+.4f} mm',
+                        f'δy = {uy:+.4f} mm',
+                        f'δ  = {ut:.4f} mm',
+                    ])
+
+            for el in range(self._dados.n_el):
+                no1, no2 = conec[el]
+                sx1, sy1 = self._w2s(*nos_hit[no1])
+                sx2, sy2 = self._w2s(*nos_hit[no2])
+                if _pt_seg_dist(sx, sy, sx1, sy1, sx2, sy2) < self._HIT:
+                    x1, y1 = nos[no1]
+                    x2, y2 = nos[no2]
+                    L      = math.hypot(x2 - x1, y2 - y1)
+                    lines  = [f'Barra {el}', f'L = {L:.3f} m']
+                    if 'forcas_internas' in self._resultado:
+                        Nv   = float(self._resultado['forcas_internas'][el])
+                        tipo = 'Tração' if Nv >= 0 else 'Compressão'
+                        lines += [f'N = {Nv/1e3:.2f} kN  ({tipo})']
+                    return '\n'.join(lines)
+            return None
+
+        # Todos os outros modos: hit-test contra posições originais
         for i in range(self._dados.n_nos):
             cx, cy = self._w2s(*nos[i])
             if math.hypot(sx - cx, sy - cy) < self._HIT:
@@ -750,7 +790,6 @@ class TrussCanvas(tk.Canvas):
                     lines += [f'δx = {ux:.4f} mm', f'δy = {uy:.4f} mm']
                 return '\n'.join(lines)
 
-        # Barras
         for el in range(self._dados.n_el):
             no1, no2 = conec[el]
             sx1, sy1 = self._w2s(*nos[no1])

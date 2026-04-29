@@ -10,6 +10,23 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.9.3] — 2026-04-28
+
+### Adicionado
+- **`truss_canvas.py` — tooltip na deformada**: no modo `'deformada'`, `_hit_test()` agora calcula as posições amplificadas (`nos_hit = nos + esc·u`) e checa o hover contra elas; tooltip de nó exibe `δx`, `δy`, `δ = √(δx²+δy²)` em mm; tooltip de barra mantém N axial se disponível
+- **`truss_gui.py` — catálogo com ordenação por coluna**: clicar em qualquer cabeçalho da Treeview ordena crescente (↑); segundo clique inverte para decrescente (↓); ordenação numérica para colunas de valor, lexicográfica para designação; filtro por diâmetro zera a ordenação
+- **`truss_gui.py` — inserir perfil por duplo-clique**: botão "Inserir do Catálogo" na aba Seções abre o catálogo em modo seleção; duplo-clique numa linha insere `area_cm2` (e E = 200 GPa) na primeira linha vazia da tabela de seções, ou acrescenta ao final
+  - Arquitetura: `_abrir_catalogo_perfis(on_select=None)` aceita callback; quando `None` = modo leitura (botão "Ver Catálogo"); `_inserir_perfil_na_secao(row)` é o único ponto a editar quando o campo a inserir mudar (área → espessura, designação, etc.)
+  - Hint "Duplo-clique para inserir na tabela de seções" só aparece no modo seleção
+
+### Alterado
+- `_show_two_sheets`: `btn_top_extra` passa a aceitar lista de `(texto, comando)`, mantendo compatibilidade com tupla simples
+
+### Pendências resolvidas nesta versão
+- [x] ~~Tooltip na deformada (posições deformadas + δx/δy/δ_total)~~
+
+---
+
 ## [0.9.2] — 2026-04-27
 
 ### Adicionado
@@ -339,7 +356,7 @@ Versionamento: `MAJOR.MINOR.PATCH`
 ## Pendências conhecidas / próximas versões
 
 ### GUI
-- [ ] **Tooltip na deformada**: no modo `'deformada'`, o hit-test deve checar contra as posições **deformadas** dos nós (atualmente checa a posição original); ao hover exibir: nó, δx, δy (mm) e δ_total = √(δx²+δy²) mm; implementação: `_hit_test()` recebe `nos_def` quando modo é `'deformada'`
+- [x] ~~**Tooltip na deformada**~~ *(v0.9.3)*
 - [ ] **Catálogo de perfis — ordenação por coluna**: clicar no cabeçalho de qualquer coluna da Treeview deve ordenar os perfis do menor para o maior (e reverter no segundo clique); colunas numéricas (D, t, A, m, r…) requerem ordenação numérica, não lexicográfica
 - [ ] **Catálogo de perfis — inserir área por clique**: duplo-clique (ou botão "Usar este perfil") em uma linha do catálogo deve inserir a área do perfil selecionado (coluna `A_cm2`) e o módulo E padrão na tabela de seções, preenchendo a linha selecionada/nova; requer referência ao `sheet_sec` dentro de `_abrir_catalogo_perfis()`
 - [ ] Interface gráfica de lançamento clicável (click-to-connect nas coordenadas)
