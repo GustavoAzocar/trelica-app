@@ -359,6 +359,7 @@ Versionamento: `MAJOR.MINOR.PATCH`
 - [x] ~~**Tooltip na deformada**~~ *(v0.9.3)*
 - [ ] **Catálogo de perfis — ordenação por coluna**: clicar no cabeçalho de qualquer coluna da Treeview deve ordenar os perfis do menor para o maior (e reverter no segundo clique); colunas numéricas (D, t, A, m, r…) requerem ordenação numérica, não lexicográfica
 - [ ] **Catálogo de perfis — inserir área por clique**: duplo-clique (ou botão "Usar este perfil") em uma linha do catálogo deve inserir a área do perfil selecionado (coluna `A_cm2`) e o módulo E padrão na tabela de seções, preenchendo a linha selecionada/nova; requer referência ao `sheet_sec` dentro de `_abrir_catalogo_perfis()`
+- [ ] **Cargas concentradas nodais — input na GUI**: o motor FEA e o formato `.trelica` já suportam forças nodais diretas (tabela `forcas` com `id_no | Fx_N | Fy_N`); o que falta é a etapa de entrada na GUI — atualmente só existe carga distribuída (etapa 6); adicionar tabela editável de forças concentradas por nó (similar à tabela de apoios), permitindo Fx e Fy independentes por nó; os modelos `10barras_CasoI.trelica` e `10barras_CasoII.trelica` já usam forças concentradas — abrir via "Arquivo → Abrir Projeto" e ir direto à etapa 8 (Dimensionar) funciona sem a etapa 6
 - [ ] Interface gráfica de lançamento clicável (click-to-connect nas coordenadas)
 
 ### Engine / Norma
@@ -368,7 +369,7 @@ Versionamento: `MAJOR.MINOR.PATCH`
   - Para CHS em flexão (futuro): limite `D/t ≤ 0,07·E/fy` para seção compacta
   - Implementação sugerida: nova função `_fator_reducao_local_chs(D_t, fy, E)` retornando fator Ql ∈ (0,1]; `Nc_Rd` e `verificar_barras` passam a multiplicar por Ql; `ParamNorma.beta_td` já carrega t/D — calcular D/t = 1/(2·beta_td) quando `A` e `D` precisarem ser reconstituídos
   - Alertas: quando `D/t > 0,15·E/fy` emitir aviso de "seção esbelta — flambagem local governa"
-- [ ] **Validação normativa**: executar `VALIDACAO_truss_norma.ipynb` com exemplos manuais da NBR — em especial os cálculos de `Nc_Rd`, χ e esbeltez reduzida λo (notebook criado, aguarda execução)
+- [ ] **Validação normativa — comparação cruzada com artigo**: validar `truss_norma.py` (App) e o notebook da Emily (`Trelica_REV03_tubular_`) contra um mesmo exemplo de artigo; verificar N, Nc,Rd, Nt,Rd e UC por barra; confirmar alinhamento com NBR 8800:2024 (χ pela curva europeia — o notebook da Emily usa fórmula da NBR 8800:2008 revogada); observações adicionais: bug `s = dy²/L` no notebook da Emily precisa ser corrigido antes da rodada de validação; notebook `VALIDACAO_truss_norma.ipynb` criado, aguarda exemplo de artigo
 
 ### Otimizador
 - [ ] **Otimização de forma e topologia — GUI**: o engine (`truss_engine.py`) **já suporta** `otimizar_geometria=True` e `nos_geometria_livre` em `ConfigOtimizacao`, mas a GUI fixa `otimizar_geometria=False` e nunca expõe essa funcionalidade
