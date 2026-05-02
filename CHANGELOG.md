@@ -10,6 +10,22 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.9.4] — 2026-05-02
+
+### Adicionado
+- **`truss_gui.py` — cargas concentradas nodais na etapa 6**: o painel de carregamento foi reestruturado em duas seções separadas por divisor:
+  - **Carga distribuída** (topo): controles q (kN/m), direção e banzo — igual ao anterior
+  - **Forças Nodais** (abaixo): `tksheet.Sheet` editável com colunas `id_no | Fx (kN) | Fy (kN)`, pré-populado com forças já salvas (N→kN); permite inserção manual de cargas concentradas por nó
+  - `_merge_distribuida(df_new)`: acumula forças distribuídas calculadas nas linhas existentes por `id_no` (soma, não substitui) — permite carregamentos mistos
+  - "Calcular e Adicionar à Tabela": converte carga distribuída em forças nodais e mescla na tabela; feedback na label de status
+  - "Salvar Carregamento": lê a tabela inteira, converte kN→N e persiste em `self.dfs['forcas']`; único ponto de persistência
+  - "+ Adicionar linha": insere linha em branco para forças concentradas adicionais
+
+### Pendências resolvidas nesta versão
+- [x] ~~Cargas concentradas nodais — input na GUI~~
+
+---
+
 ## [0.9.3] — 2026-04-28
 
 ### Adicionado
@@ -359,7 +375,7 @@ Versionamento: `MAJOR.MINOR.PATCH`
 - [x] ~~**Tooltip na deformada**~~ *(v0.9.3)*
 - [ ] **Catálogo de perfis — ordenação por coluna**: clicar no cabeçalho de qualquer coluna da Treeview deve ordenar os perfis do menor para o maior (e reverter no segundo clique); colunas numéricas (D, t, A, m, r…) requerem ordenação numérica, não lexicográfica
 - [ ] **Catálogo de perfis — inserir área por clique**: duplo-clique (ou botão "Usar este perfil") em uma linha do catálogo deve inserir a área do perfil selecionado (coluna `A_cm2`) e o módulo E padrão na tabela de seções, preenchendo a linha selecionada/nova; requer referência ao `sheet_sec` dentro de `_abrir_catalogo_perfis()`
-- [ ] **Cargas concentradas nodais — input na GUI**: o motor FEA e o formato `.trelica` já suportam forças nodais diretas (tabela `forcas` com `id_no | Fx_N | Fy_N`); o que falta é a etapa de entrada na GUI — atualmente só existe carga distribuída (etapa 6); adicionar tabela editável de forças concentradas por nó (similar à tabela de apoios), permitindo Fx e Fy independentes por nó; os modelos `10barras_CasoI.trelica` e `10barras_CasoII.trelica` já usam forças concentradas — abrir via "Arquivo → Abrir Projeto" e ir direto à etapa 8 (Dimensionar) funciona sem a etapa 6
+- [x] ~~**Cargas concentradas nodais — input na GUI**~~ *(v0.9.4)*
 - [ ] Interface gráfica de lançamento clicável (click-to-connect nas coordenadas)
 
 ### Engine / Norma
@@ -401,4 +417,4 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ---
 
-*Atualizado em 2026-04-27.*
+*Atualizado em 2026-05-02.*

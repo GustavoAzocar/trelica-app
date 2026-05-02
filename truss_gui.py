@@ -710,90 +710,167 @@ class TrussApp(tk.Tk):
             return
 
         self._clear_right()
-        self._set_status("Defina o carregamento distribuído.")
+        self._set_status("Defina o carregamento: distribuído e/ou concentrado.")
 
-        f = ttk.Frame(self.content, padding=20)
+        outer = tk.Frame(self.content)
+        outer.pack(fill='both', expand=True)
+
+        # ── Seção: carga distribuída ──────────────────────────────────────────
+        f = ttk.Frame(outer, padding=(20, 12, 20, 4))
         f.pack(anchor='n', fill='x')
 
-        ttk.Label(f, text='Inserir Carregamento Distribuído',
-                  font=('Segoe UI', 12, 'bold')
-                  ).grid(row=0, column=0, columnspan=3, sticky='w', pady=(0, 14))
+        ttk.Label(f, text='Carga Distribuída',
+                  font=('Segoe UI', 11, 'bold')
+                  ).grid(row=0, column=0, columnspan=3, sticky='w', pady=(0, 8))
 
-        # Valor
-        ttk.Label(f, text='Valor (kN/m):').grid(row=1, column=0, sticky='e', padx=8, pady=5)
+        ttk.Label(f, text='Valor (kN/m):').grid(row=1, column=0, sticky='e', padx=8, pady=4)
         q_var = tk.StringVar(value='10.0')
         ttk.Entry(f, textvariable=q_var, width=14).grid(row=1, column=1, sticky='w')
 
-        # Direção
-        ttk.Label(f, text='Direção:').grid(row=2, column=0, sticky='e', padx=8, pady=5)
+        ttk.Label(f, text='Direção:').grid(row=2, column=0, sticky='e', padx=8, pady=4)
         dir_var = tk.StringVar(value='-Y  (para baixo)')
         ttk.Combobox(f, textvariable=dir_var, state='readonly', width=22,
                      values=['-Y  (para baixo)', '+Y  (para cima)',
                               '-X  (para esquerda)', '+X  (para direita)']
                      ).grid(row=2, column=1, sticky='w')
 
-        # Banzo onde a carga é aplicada
         descricoes = (list(self.dfs['barras']['descricao'].dropna().unique())
                       if not self.dfs['barras'].empty else [])
-        ttk.Label(f, text='Aplicar em:').grid(row=3, column=0, sticky='e', padx=8, pady=5)
+        ttk.Label(f, text='Aplicar em:').grid(row=3, column=0, sticky='e', padx=8, pady=4)
         banzo_var = tk.StringVar(value=descricoes[0] if descricoes else '')
         ttk.Combobox(f, textvariable=banzo_var, state='readonly', width=24,
                      values=descricoes
                      ).grid(row=3, column=1, sticky='w')
 
-        # Resultado textual
-        resultado_var = tk.StringVar(value='')
-        ttk.Label(f, textvariable=resultado_var,
-                  font=('Courier New', 9), foreground='#336699', justify='left'
-                  ).grid(row=5, column=0, columnspan=3, sticky='w', pady=(12, 0))
+        msg_var = tk.StringVar(value='')
+        ttk.Label(f, textvariable=msg_var,
+                  font=('Segoe UI', 8, 'italic'), foreground='#336699'
+                  ).grid(row=5, column=0, columnspan=3, sticky='w', pady=(2, 0))
 
-        def aplicar():
+        # ── Separador + tabela de forças nodais ───────────────────────────────
+        ttk.Separator(outer, orient='horizontal').pack(fill='x', padx=10, pady=(6, 2))
+
+        frm_tit = ttk.Frame(outer)
+        frm_tit.pack(fill='x', padx=12, pady=(2, 2))
+        ttk.Label(frm_tit, text='Forças Nodais',
+                  font=('Segoe UI', 11, 'bold')).pack(side='left')
+        ttk.Label(frm_tit, text='distribuídas e/ou concentradas  |  unidades: kN',
+                  font=('Segoe UI', 8), foreground='#888888').pack(side='left', padx=8)
+
+        # Pré-popula com forças já salvas (N → kN)
+        df_f0 = self.dfs['forcas']
+        if not df_f0.empty:
+            data_ini = [[int(r['id_no']),
+                         round(float(r['Fx_N']) / 1e3, 4),
+                         round(float(r['Fy_N']) / 1e3, 4)]
+                        for _, r in df_f0.iterrows()]
+        else:
+            data_ini = []
+        n_extras = max(4, 8 - len(data_ini))
+        data_ini += [['', '', ''] for _ in range(n_extras)]
+
+        sheet_f = tksheet.Sheet(outer,
+                                data=data_ini,
+                                headers=['id_no', 'Fx (kN)', 'Fy (kN)'],
+                                height=200)
+        sheet_f.enable_bindings('all')
+        sheet_f.pack(fill='both', expand=True, padx=12, pady=(0, 2))
+
+        # ── Helpers ───────────────────────────────────────────────────────────
+
+        def _ler_sheet():
+            """Retorna lista de [id_no, Fx_kN, Fy_kN] para linhas não-vazias."""
+            rows = []
+            for r in sheet_f.get_sheet_data():
+                if not any(c not in ('', None) for c in r):
+                    continue
+                try:
+                    rows.append([int(r[0]),
+                                 float(str(r[1]).replace(',', '.')),
+                                 float(str(r[2]).replace(',', '.'))])
+                except (ValueError, TypeError, IndexError):
+                    pass
+            return rows
+
+        def _merge_distribuida(df_new):
+            """Soma forças distribuídas às linhas existentes (acumula por id_no)."""
+            current  = _ler_sheet()
+            idx_map  = {row[0]: i for i, row in enumerate(current)}
+            for _, r in df_new.iterrows():
+                no = int(r['id_no'])
+                fx = round(float(r['Fx_N']) / 1e3, 4)
+                fy = round(float(r['Fy_N']) / 1e3, 4)
+                if no in idx_map:
+                    current[idx_map[no]][1] = round(current[idx_map[no]][1] + fx, 4)
+                    current[idx_map[no]][2] = round(current[idx_map[no]][2] + fy, 4)
+                else:
+                    current.append([no, fx, fy])
+            new_data = [[r[0], r[1], r[2]] for r in current]
+            new_data += [['', '', ''] for _ in range(max(0, 4 - len(new_data)))]
+            sheet_f.set_sheet_data(new_data)
+
+        # ── Comandos ──────────────────────────────────────────────────────────
+
+        def calcular_dist():
             try:
-                q = float(q_var.get().replace(',', '.')) * 1e3   # kN/m → N/m
+                q = float(q_var.get().replace(',', '.')) * 1e3
             except ValueError:
                 messagebox.showerror("Erro", "Valor de q inválido.")
                 return
-
             dir_map = {
-                '-Y  (para baixo)':   ( 0.0, -1.0),
-                '+Y  (para cima)':    ( 0.0,  1.0),
-                '-X  (para esquerda)':(-1.0,  0.0),
-                '+X  (para direita)': ( 1.0,  0.0),
+                '-Y  (para baixo)':    ( 0.0, -1.0),
+                '+Y  (para cima)':     ( 0.0,  1.0),
+                '-X  (para esquerda)': (-1.0,  0.0),
+                '+X  (para direita)':  ( 1.0,  0.0),
             }
             dx, dy = dir_map[dir_var.get()]
-
-            df_f = calcular_forcas_distribuidas(
+            df_d = calcular_forcas_distribuidas(
                 self.dfs['nos'], self.dfs['barras'],
                 q_Nm=q, descricao_banzo=banzo_var.get(),
                 dir_x=dx, dir_y=dy,
             )
-
-            if df_f.empty:
-                messagebox.showwarning(
-                    "Aviso",
+            if df_d.empty:
+                messagebox.showwarning("Aviso",
                     "Nenhum nó encontrado no banzo selecionado.\n"
-                    "Verifique se a descrição das barras está correta."
-                )
+                    "Verifique se a descrição das barras está correta.")
                 return
+            _merge_distribuida(df_d)
+            msg_var.set(f"✓ {len(df_d)} forças adicionadas à tabela — clique em Salvar para confirmar")
 
-            self.dfs['forcas'] = df_f
+        def salvar():
+            rows = _ler_sheet()
+            if not rows:
+                messagebox.showwarning("Aviso", "Nenhuma força definida na tabela.")
+                return
+            import pandas as pd
+            self.dfs['forcas'] = pd.DataFrame({
+                'id_no': [r[0] for r in rows],
+                'Fx_N':  [r[1] * 1e3 for r in rows],
+                'Fy_N':  [r[2] * 1e3 for r in rows],
+            })
             self._marcar_etapa('carregamento')
+            self._set_status(f"Carregamento salvo — {len(rows)} força(s) nodal(is).")
+            messagebox.showinfo("Salvo", f"{len(rows)} força(s) nodal(is) salva(s).")
 
-            linhas = [f"  Nó {int(r.id_no):>3d}:  "
-                      f"Fx = {r.Fx_N/1e3:+8.2f} kN   "
-                      f"Fy = {r.Fy_N/1e3:+8.2f} kN"
-                      for _, r in df_f.iterrows()]
-            resultado_var.set(
-                f"Forças nodais calculadas ({len(df_f)} nós):\n" +
-                '\n'.join(linhas)
-            )
-            self._set_status(
-                f"Carregamento aplicado — {len(df_f)} nós carregados "
-                f"({float(q_var.get()):.2f} kN/m em '{banzo_var.get()}')."
-            )
+        def limpar():
+            sheet_f.set_sheet_data([['', '', ''] for _ in range(6)])
+            msg_var.set('')
 
-        ttk.Button(f, text='Calcular e Aplicar',
-                   command=aplicar).grid(row=4, column=0, columnspan=2, pady=10)
+        # ── Botões da seção distribuída (grid) ───────────────────────────────
+        frm_dbtn = ttk.Frame(f)
+        frm_dbtn.grid(row=4, column=0, columnspan=3, sticky='w', pady=(6, 0))
+        ttk.Button(frm_dbtn, text='Calcular e Adicionar à Tabela',
+                   command=calcular_dist).pack(side='left', padx=(0, 8))
+        ttk.Button(frm_dbtn, text='Limpar Tabela',
+                   command=limpar).pack(side='left')
+
+        # ── Botões rodapé ─────────────────────────────────────────────────────
+        frm_bot = ttk.Frame(outer)
+        frm_bot.pack(fill='x', padx=12, pady=(0, 8))
+        ttk.Button(frm_bot, text='+ Adicionar linha',
+                   command=lambda: sheet_f.insert_row()).pack(side='left')
+        ttk.Button(frm_bot, text='Salvar Carregamento',
+                   command=salvar).pack(side='right')
 
     # ─────────────────────────────────────────────────────────────────────────
     # Comandos — Análise e Otimização
