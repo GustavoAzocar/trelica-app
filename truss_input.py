@@ -48,9 +48,13 @@ def dataframes_vazios() -> dict:
     })
 
     secoes = pd.DataFrame({
-        'id_secao': pd.Series(dtype=int),
-        'area_cm2': pd.Series(dtype=float),
-        'E_GPa':    pd.Series(dtype=float),
+        'id_secao':  pd.Series(dtype=int),
+        'designacao': pd.Series(dtype=str),
+        'D_mm':      pd.Series(dtype=float),
+        't_mm':      pd.Series(dtype=float),
+        'm_kg_m':    pd.Series(dtype=float),
+        'area_cm2':  pd.Series(dtype=float),
+        'E_GPa':     pd.Series(dtype=float),
     })
 
     forcas = pd.DataFrame({
@@ -228,8 +232,10 @@ def exemplo_rev02() -> dict:
 
     # Seções
     df_secoes = pd.DataFrame([
-        {'id_secao': 0, 'area_cm2': area_h, 'E_GPa': E},   # banzo / montantes
-        {'id_secao': 1, 'area_cm2': area_d, 'E_GPa': E},   # diagonais
+        {'id_secao': 0, 'designacao': '', 'D_mm': float('nan'), 't_mm': float('nan'),
+         'm_kg_m': float('nan'), 'area_cm2': area_h, 'E_GPa': E},
+        {'id_secao': 1, 'designacao': '', 'D_mm': float('nan'), 't_mm': float('nan'),
+         'm_kg_m': float('nan'), 'area_cm2': area_d, 'E_GPa': E},
     ])
 
     # Conectividade

@@ -229,6 +229,12 @@ class TrussApp(tk.Tk):
         from truss_norma import ParamNorma
         self._param_norma = ParamNorma()
 
+        # Restrições de otimização (configuradas em cmd_param_norma, lidas em cmd_otimizar)
+        self._var_desl_ativo     = tk.BooleanVar(value=False)
+        self._var_desl_n         = tk.StringVar(value='300')
+        self._var_esbeltez_ativo = tk.BooleanVar(value=False)
+        self._var_esbeltez_max   = tk.StringVar(value='200')
+
         # Indicadores de conclusão de cada etapa de entrada
         # chave → tk.StringVar com símbolo (○ pendente, ✓ concluído)
         self._etapas: dict = {
@@ -573,7 +579,7 @@ class TrussApp(tk.Tk):
     def cmd_inserir_barras(self):
         sheet_sec, sheet_bar = self._show_two_sheets(
             self.dfs['secoes'],
-            titulo_top='Seções  —  id_secao | area_cm2 | E_GPa',
+            titulo_top='Seções  —  id_secao | Designação | D(mm) | t(mm) | m (kg/m) | A (cm²) | E_GPa',
             df_bot=self.dfs['barras'],
             titulo_bot=(
                 'Barras  —  id_barra | no_inicio | no_fim | id_secao | descricao\n'
@@ -593,11 +599,14 @@ class TrussApp(tk.Tk):
 
         def salvar_secoes():
             df = _read_sheet(sheet_sec,
-                             columns=['id_secao', 'area_cm2', 'E_GPa'],
+                             columns=['id_secao', 'designacao', 'D_mm', 't_mm',
+                                      'm_kg_m', 'area_cm2', 'E_GPa'],
                              dtypes={'id_secao': int, 'area_cm2': float, 'E_GPa': float})
             if df.empty:
                 messagebox.showwarning("Aviso", "Nenhuma seção válida.")
                 return
+            for col in ['D_mm', 't_mm', 'm_kg_m']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
             self.dfs['secoes'] = df
             self._marcar_etapa('secoes')
             self._set_status(f"Seções salvas — {len(df)} seção(ões).")
@@ -1355,19 +1364,25 @@ class TrussApp(tk.Tk):
 
         Recebe o dict completo da linha selecionada — chaves: designacao, d_mm,
         t_mm, m_kg_m, A_cm2, r_cm, I_cm4, W_cm3, U_m2m.
-        Para mudar o que é inserido (área, espessura, designação…), edite
-        apenas esta função; _abrir_catalogo_perfis não precisa ser tocada.
+        Para mudar o que é inserido, edite apenas esta função;
+        _abrir_catalogo_perfis não precisa ser tocada.
         """
         sheet = getattr(self, '_sheet_secoes', None)
         if sheet is None:
             return
-        area_cm2 = float(str(row.get('A_cm2', '0')).replace(',', '.'))
+        area_cm2   = float(str(row.get('A_cm2',  '0')).replace(',', '.'))
+        designacao = str(row.get('designacao', ''))
+        d_mm       = row.get('d_mm',   '')
+        t_mm_val   = row.get('t_mm',   '')
+        m_kg_m     = row.get('m_kg_m', '')
         data = [list(r) for r in sheet.get_sheet_data()]
         for idx, r in enumerate(data):
             if not any(c not in ('', None) for c in r):
-                sheet.set_row_data(idx, [idx + 1, f'{area_cm2:.2f}', '200.0'])
+                sheet.set_row_data(idx, [idx + 1, designacao, d_mm, t_mm_val,
+                                         m_kg_m, f'{area_cm2:.2f}', '200.0'])
                 return
-        sheet.insert_row(values=[len(data) + 1, f'{area_cm2:.2f}', '200.0'])
+        sheet.insert_row(values=[len(data) + 1, designacao, d_mm, t_mm_val,
+                                  m_kg_m, f'{area_cm2:.2f}', '200.0'])
 
     def cmd_otimizar(self):
         if self.resultado_inicial is None:
@@ -1384,8 +1399,27 @@ class TrussApp(tk.Tk):
         # Bounds: área pode reduzir até 30% da menor seção atual, crescer 3×
         A_min = max(dados.areas.min() * 0.3, 1e-4)
         A_max = dados.areas.max() * 3.0
-        # Objetivo: minimizar volume de aço
-        # Restrições: UC ≤ 1,0 por barra (NBR 8800/16239) — impede solução trivial
+
+        # Restrição δ_adm
+        n_desl    = 0.0
+        delta_adm = None
+        if self._var_desl_ativo.get():
+            try:
+                n_desl = float(self._var_desl_n.get())
+                if n_desl > 0:
+                    span      = float(dados.nos[:, 0].max() - dados.nos[:, 0].min())
+                    delta_adm = span / n_desl
+            except ValueError:
+                pass
+
+        # Restrição kL/r
+        esbeltez_max = None
+        if self._var_esbeltez_ativo.get():
+            try:
+                esbeltez_max = float(self._var_esbeltez_max.get())
+            except ValueError:
+                pass
+
         cfg = ConfigOtimizacao(
             otimizar_areas=True,
             otimizar_geometria=False,
@@ -1393,6 +1427,8 @@ class TrussApp(tk.Tk):
             objetivo='volume',
             usar_restricoes_norma=True,
             param_norma=self._param_norma,
+            restricao_deslocamento_adm=delta_adm,
+            restricao_esbeltez_max=esbeltez_max,
         )
 
         # Prepara log e indicadores
@@ -1400,6 +1436,10 @@ class TrussApp(tk.Tk):
         self._log_append('▶ Otimizador iniciado')
         self._log_append(f'  Barras: {dados.n_el}   Variáveis: {dados.n_el}')
         self._log_append(f'  Vol. inicial: {dados.volume_total()*1e6:.1f} cm³')
+        if delta_adm is not None:
+            self._log_append(f'  δ_adm: L/{n_desl:.0f} = {delta_adm*1e3:.1f} mm')
+        if esbeltez_max is not None:
+            self._log_append(f'  kL/r ≤ {esbeltez_max:.0f}')
         self._log_append('─' * 32)
         self._set_status("Otimizando — aguarde...")
         self._progress_start()
@@ -1519,6 +1559,8 @@ class TrussApp(tk.Tk):
         win.title("Log da Otimização")
         win.geometry("720x560")
         win.resizable(True, True)
+        win.lift()
+        win.focus_set()
 
         nb = ttk.Notebook(win)
         nb.pack(fill='both', expand=True, padx=6, pady=6)
@@ -1804,6 +1846,50 @@ class TrussApp(tk.Tk):
                   foreground='gray', font=('Segoe UI', 8)
                   ).grid(row=7, column=0, columnspan=2, sticky='w')
 
+        # ── Aba: Restrições ────────────────────────────────────────────────
+        frm_rest = ttk.Frame(nb, padding=12)
+        nb.add(frm_rest, text='  Restrições  ')
+
+        ttk.Label(frm_rest, text='Restrições de otimização (etapa 9):',
+                  font=('Segoe UI', 10, 'bold')).grid(
+                  row=0, column=0, columnspan=3, sticky='w', pady=(0, 6))
+
+        ttk.Separator(frm_rest, orient='horizontal').grid(
+            row=1, column=0, columnspan=3, sticky='ew', pady=(0, 6))
+
+        ttk.Checkbutton(frm_rest, text='Limitar deslocamento máximo',
+                        variable=self._var_desl_ativo).grid(
+                        row=2, column=0, columnspan=3, sticky='w')
+        ttk.Label(frm_rest, text='   δ_adm = vão / ').grid(
+                  row=3, column=0, sticky='e', padx=(20, 2), pady=4)
+        ttk.Entry(frm_rest, textvariable=self._var_desl_n, width=7).grid(
+                  row=3, column=1, sticky='w')
+        ttk.Label(frm_rest, text='(ex: 250, 300, 400)',
+                  foreground='gray', font=('Segoe UI', 8)).grid(
+                  row=3, column=2, sticky='w', padx=6)
+
+        ttk.Separator(frm_rest, orient='horizontal').grid(
+            row=4, column=0, columnspan=3, sticky='ew', pady=8)
+
+        ttk.Checkbutton(frm_rest, text='Limitar esbeltez máxima  k·L/r',
+                        variable=self._var_esbeltez_ativo).grid(
+                        row=5, column=0, columnspan=3, sticky='w')
+        ttk.Label(frm_rest, text='   k·L/r ≤ ').grid(
+                  row=6, column=0, sticky='e', padx=(20, 2), pady=4)
+        ttk.Entry(frm_rest, textvariable=self._var_esbeltez_max, width=7).grid(
+                  row=6, column=1, sticky='w')
+        ttk.Label(frm_rest, text='NBR 8800 item 5.3.2: ≤ 200',
+                  foreground='gray', font=('Segoe UI', 8)).grid(
+                  row=6, column=2, sticky='w', padx=6)
+
+        ttk.Separator(frm_rest, orient='horizontal').grid(
+            row=7, column=0, columnspan=3, sticky='ew', pady=(8, 4))
+
+        ttk.Label(frm_rest,
+                  text='k e β utilizados: definidos nas abas Norma / Seção.',
+                  foreground='gray', font=('Segoe UI', 8)).grid(
+                  row=8, column=0, columnspan=3, sticky='w')
+
         # ── Botões Aplicar / Cancelar ─────────────────────────────────────
         frm_btn = ttk.Frame(win)
         frm_btn.pack(fill='x', padx=8, pady=(0, 10))
@@ -1984,14 +2070,22 @@ class TrussApp(tk.Tk):
             if key in data:
                 self.dfs[key] = pd.DataFrame(data[key])
 
-        # Migração de compatibilidade: arquivos antigos guardam area_m2/E_Pa → converte para cm²/GPa
+        # Migração: area_m2/E_Pa → area_cm2/E_GPa (arquivos pré-v0.8)
         sec = self.dfs['secoes']
         if 'area_m2' in sec.columns and 'area_cm2' not in sec.columns:
             sec = sec.rename(columns={'area_m2': 'area_cm2'})
-            sec['area_cm2'] = sec['area_cm2'] * 1e4   # m² → cm²
+            sec['area_cm2'] = sec['area_cm2'] * 1e4
         if 'E_Pa' in sec.columns and 'E_GPa' not in sec.columns:
             sec = sec.rename(columns={'E_Pa': 'E_GPa'})
-            sec['E_GPa'] = sec['E_GPa'] * 1e-9        # Pa → GPa
+            sec['E_GPa'] = sec['E_GPa'] * 1e-9
+        # Migração: adiciona colunas de perfil se ausentes (arquivos pré-v0.9.5)
+        for col, default in [('designacao', ''), ('D_mm', float('nan')),
+                              ('t_mm', float('nan')), ('m_kg_m', float('nan'))]:
+            if col not in sec.columns:
+                sec = sec.copy()
+                sec[col] = default
+        cols_order = ['id_secao', 'designacao', 'D_mm', 't_mm', 'm_kg_m', 'area_cm2', 'E_GPa']
+        sec = sec.reindex(columns=[c for c in cols_order if c in sec.columns])
         self.dfs['secoes'] = sec
 
         # Atualiza indicadores

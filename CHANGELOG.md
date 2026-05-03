@@ -10,6 +10,66 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.9.7] — 2026-05-03
+
+### Adicionado
+- **`truss_engine.py` — restrições de projeto configuráveis no otimizador**:
+  - `ConfigOtimizacao.restricao_deslocamento_adm` (float, m): adiciona `max(|u|) ≤ δ_adm` ao SLSQP; forçar deslocamento máximo abaixo de `vão/n`
+  - `ConfigOtimizacao.restricao_esbeltez_max` (float): adiciona `k·L/r ≤ λ_max` por barra; impede que o otimizador produza barras muito esbeltas
+- **`truss_gui.py` — aba "Restrições" no painel de configurações** (botão ☰ Configurar Análise):
+  - Checkbutton + campo "δ_adm = vão / [n]" (padrão: desativado / n = 300)
+  - Checkbutton + campo "k·L/r ≤ [λ]" (padrão: desativado / λ = 200)
+  - Valores persistem durante a sessão; log do otimizador exibe as restrições ativas
+  - `k` e `β` utilizados: definidos nas abas Norma / Seção (reutilizam `param_norma`)
+
+### Notas técnicas
+- `restricao_esbeltez_max` aplica-se a todas as barras (conservador em relação à norma, que limita apenas compressão principal); controle fino pode ser feito ajustando o campo
+- `restricao_deslocamento_adm` usa `max(|u|)` sobre todos os nós livres; para projetos onde a limitação é apenas deflexão vertical, L/300 já é referência coerente
+- Restrições de esbeltez usam `raio_giracao()` da `ParamNorma` (analítico, C_r·√A); após snap discreto o `r_cm` real do catálogo é o valor preciso
+
+### Pendências resolvidas nesta versão
+- [x] ~~Restrição de deslocamento admissível (δ_adm = L/n) no otimizador~~
+- [x] ~~Esbeltez máxima enforçada como constraint (antes: só alerta)~~
+
+---
+
+## [0.9.6] — 2026-05-03
+
+### Adicionado
+- **`truss_canvas.py` — seletor de unidade do deslocamento**: no modo `'deformada'`, um `OptionMenu` aparece no canto superior direito (acima do slider) com opções `mm` e `cm`; ao trocar, atualiza imediatamente a anotação `δ_max = X.XXXX <unidade>` e o tooltip de hover dos nós (`δx / δy / δ`)
+- **`truss_gui.py` / `truss_input.py` — tabela de seções expandida**: as colunas da tabela de seções passam de 3 para 7: `id_secao | Designação | D(mm) | t(mm) | m (kg/m) | A (cm²) | E_GPa`
+  - "Inserir do Catálogo": duplo-clique agora preenche todas as colunas diretamente do perfil selecionado (designação, D, t, m e A)
+  - Colunas Designação, D, t e m são opcionais — linhas com apenas `id_secao`, `A` e `E` continuam válidas
+  - Migração automática ao abrir: arquivos anteriores (sem as novas colunas) recebem as colunas com valores em branco/NaN sem perda de dados
+
+### Alterado
+- `truss_input.py — dataframes_vazios()`: `secoes` agora tem 7 colunas com os novos campos; `dataframes_para_trelica()` não foi alterado (usa apenas `area_cm2`/`E_GPa` para o FEA)
+
+---
+
+## [0.9.5] — 2026-05-03
+
+### Adicionado
+- **`truss_norma.py` — flambagem local CHS (NBR 8800:2024 Seção 5.3.4.3)**:
+  - Nova função `_fator_Q_chs(D_t, fy, E) → (Q, classificacao)`: classifica a seção e retorna o fator Q
+    - D/t ≤ 0,15·E/fy → `'nao_esbelta'`, Q = 1,0
+    - 0,15·E/fy < D/t ≤ 0,45·E/fy → `'esbelta'`, Q = (0,038·E/fy)/(D/t) + 2/3
+    - D/t > 0,45·E/fy → `'invalida'`, alerta normativo
+  - `Nc_Rd` aceita novo parâmetro `Q=1.0`: interação global × local via λo_eff = λo·√Q e Nc,Rd = χ(λo_eff)·Q·Ag·fy/γa1 (equivalente EN 1993-1-1 Seção 6.3.1 para classe 4)
+  - `verificar_barras`: computa D_t = 1/beta_td automaticamente; passa Q ao Nc_Rd; retorna `'Q'` (ndarray) e `'classificacao_local'` (list) no dict; emite alerta resumido quando Q < 1
+  - `constraints_norma`: incorpora Q na restrição de compressão do SLSQP — otimização considera flambagem local
+- **`truss_catalogo.py` — Q real por perfil no snap discreto**: `_uc_barra(... D_t=None)` aceita D/t do catálogo e aplica `_fator_Q_chs` para compressão; `snap_discreto` passa `d_mm/t_mm` do perfil selecionado — UC agora considera flambagem local com o perfil real
+
+### Notas sobre a norma
+- Seção D.2.6 (NBR 8800) **não se aplica** a CHS em compressão axial: é para chapa enrijecida/viga mista. A formulação correta é a Seção 5.3.4.3
+- NBR 16239:2013 Seção 5.2 é consistente: mesma fórmula Q com curva 'a'
+- Para D/t típicos de perfis estruturais CHS (10–30) com fy = 250 MPa: λr = 120 → todos não-esbeltos (Q = 1,0 em uso normal). A verificação é preventiva para projetos com paredes finas
+
+### Pendências resolvidas nesta versão
+- [x] ~~Flambagem local CHS (NBR 8800:2024 / NBR 16239:2013)~~
+
+---
+
 ## [0.9.4] — 2026-05-02
 
 ### Adicionado
@@ -373,18 +433,14 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ### GUI
 - [x] ~~**Tooltip na deformada**~~ *(v0.9.3)*
-- [ ] **Catálogo de perfis — ordenação por coluna**: clicar no cabeçalho de qualquer coluna da Treeview deve ordenar os perfis do menor para o maior (e reverter no segundo clique); colunas numéricas (D, t, A, m, r…) requerem ordenação numérica, não lexicográfica
-- [ ] **Catálogo de perfis — inserir área por clique**: duplo-clique (ou botão "Usar este perfil") em uma linha do catálogo deve inserir a área do perfil selecionado (coluna `A_cm2`) e o módulo E padrão na tabela de seções, preenchendo a linha selecionada/nova; requer referência ao `sheet_sec` dentro de `_abrir_catalogo_perfis()`
+- [x] ~~**Catálogo de perfis — ordenação por coluna**~~ *(v0.9.3)*
+- [x] ~~**Catálogo de perfis — inserir área por clique**~~ *(v0.9.3)*
 - [x] ~~**Cargas concentradas nodais — input na GUI**~~ *(v0.9.4)*
 - [ ] Interface gráfica de lançamento clicável (click-to-connect nas coordenadas)
+- [ ] **Tabela de seções — coluna E_GPa por perfil**: atualmente E = 200 GPa fixo ao inserir do catálogo; futuramente derivar E do material escolhido (aço carbono / alumínio) ou permitir edição direta
 
 ### Engine / Norma
-- [ ] **Flambagem local — CHS (NBR 16239:2013 / NBR 8800:2024)**: o `truss_norma.py` implementa apenas instabilidade **global** (fator χ via λo); a verificação de flambagem **local** da parede do perfil (relação D/t) **não está implementada**
-  - NBR 8800:2024 Tab. 5.2 / NBR 16239:2013 Seção 6.2 classificam CHS por esbeltez da parede: `λp = 0,07·E/fy` (compacta), `λr = 0,15·E/fy` (não-compacta/esbelta)
-  - Para CHS em compressão: `D/t ≤ 0,15·E/fy` é o limite da seção não-esbelta; acima disso redução adicional de `Nc,Rd`
-  - Para CHS em flexão (futuro): limite `D/t ≤ 0,07·E/fy` para seção compacta
-  - Implementação sugerida: nova função `_fator_reducao_local_chs(D_t, fy, E)` retornando fator Ql ∈ (0,1]; `Nc_Rd` e `verificar_barras` passam a multiplicar por Ql; `ParamNorma.beta_td` já carrega t/D — calcular D/t = 1/(2·beta_td) quando `A` e `D` precisarem ser reconstituídos
-  - Alertas: quando `D/t > 0,15·E/fy` emitir aviso de "seção esbelta — flambagem local governa"
+- [x] ~~**Flambagem local — CHS (NBR 8800:2024 / NBR 16239:2013)**~~ *(v0.9.5)*
 - [ ] **Validação normativa — comparação cruzada com artigo**: validar `truss_norma.py` (App) e o notebook da Emily (`Trelica_REV03_tubular_`) contra um mesmo exemplo de artigo; verificar N, Nc,Rd, Nt,Rd e UC por barra; confirmar alinhamento com NBR 8800:2024 (χ pela curva europeia — o notebook da Emily usa fórmula da NBR 8800:2008 revogada); observações adicionais: bug `s = dy²/L` no notebook da Emily precisa ser corrigido antes da rodada de validação; notebook `VALIDACAO_truss_norma.ipynb` criado, aguarda exemplo de artigo
 
 ### Otimizador
@@ -417,4 +473,4 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ---
 
-*Atualizado em 2026-05-02.*
+*Atualizado em 2026-05-03 (v0.9.6).*

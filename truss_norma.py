@@ -214,16 +214,58 @@ def _fator_reducao_flambagem(lambda_o: float, curva: str = 'a') -> float:
     return min(chi, 1.0)
 
 
+# ---------------------------------------------------------------------------
+# Flambagem local — perfis CHS (seções esbeltas em compressão)
+# ---------------------------------------------------------------------------
+
+def _fator_Q_chs(D_t: float, fy: float, E: float) -> tuple[float, str]:
+    """
+    Fator Q de redução por flambagem local — perfis CHS em compressão axial.
+
+    NBR 8800:2024 Seção 5.3.4.3 — área efetiva para seções esbeltas:
+        Q_a = (0,038 · E/fy) / (D/t)  +  2/3      para D/t > λr
+
+    Para CHS não há elementos não-enrijecidos projetantes (Qs = 1,0), logo Q = Qa.
+
+    Classificação da seção (NBR 8800:2024 Tabela C.2 / NBR 16239:2013 Seção 5.2):
+        D/t ≤ λr = 0,15·E/fy      →  'nao_esbelta'  (Q = 1,0)
+        λr < D/t ≤ 0,45·E/fy     →  'esbelta'       (0 < Q < 1)
+        D/t > 0,45·E/fy           →  'invalida'      (fora do escopo normativo)
+
+    Parâmetros
+    ----------
+    D_t : float   Relação diâmetro / espessura (D/t) do perfil CHS.
+    fy  : float   Tensão de escoamento [Pa].
+    E   : float   Módulo de elasticidade [Pa].
+
+    Retorna
+    -------
+    (Q, classificacao)
+        Q             — fator adimensional ∈ (0, 1]
+        classificacao — 'nao_esbelta' | 'esbelta' | 'invalida'
+    """
+    lim_r   = 0.15 * E / fy
+    lim_max = 0.45 * E / fy
+
+    if D_t <= lim_r:
+        return 1.0, 'nao_esbelta'
+    if D_t > lim_max:
+        return 0.0, 'invalida'
+
+    Q = (0.038 * E / fy) / D_t + 2.0 / 3.0
+    return float(min(Q, 1.0)), 'esbelta'
+
+
 def Nc_Rd(Ag: float, fy: float, E: float, L: float, r: float,
           k: float = 1.0, gama_a1: float = 1.10,
-          curva: str = 'a') -> tuple[float, float, float]:
+          curva: str = 'a', Q: float = 1.0) -> tuple[float, float, float]:
     """
-    Resistência de cálculo à compressão com flambagem global.
+    Resistência de cálculo à compressão com flambagem global e local.
 
-    NBR 8800:2024 — Seção 5.3:
-        Nc,Rd = χ · Ag · fy / γa1
+    NBR 8800:2024 — Seções 5.3 e 5.3.4.3:
+        Nc,Rd = χ(λo_eff) · Q · Ag · fy / γa1
 
-    NBR 16239:2013 — Seção 6.3 (perfis tubulares):
+    NBR 16239:2013 — Seção 5.2 (perfis tubulares):
         Mesma formulação, usando curva 'a'.
 
     Parâmetros
@@ -236,22 +278,28 @@ def Nc_Rd(Ag: float, fy: float, E: float, L: float, r: float,
     k  : float      Fator de comprimento efetivo (1,0 para bi-articulada).
     gama_a1 : float Coeficiente de ponderação γa1 (padrão 1,10).
     curva : str     Curva de flambagem (padrão 'a' para tubulares).
+    Q : float       Fator de redução por flambagem local (padrão 1,0 = não-esbelta).
+                    Para CHS com D/t > 0,15·E/fy, usar _fator_Q_chs().
+                    Interação global × local (NBR 8800:2024 Seção 5.3.4.3):
+                        λo_eff = λo · √Q
+                        Nc,Rd  = χ(λo_eff) · Q · Ag · fy / γa1
 
     Retorna
     -------
     (Nc_Rd, lambda_o, chi) : tuple
-        Nc_Rd   — Resistência à compressão [N].
-        lambda_o — Índice de esbeltez reduzido [-].
-        chi      — Fator de redução de flambagem [-].
+        Nc_Rd    — Resistência à compressão [N].
+        lambda_o — Índice de esbeltez geométrico (kL/r normalizado) [-].
+        chi      — Fator χ calculado com λo_eff = λo·√Q [-].
 
     Notas
     -----
     NBR 8800:2024 limita kL/r ≤ 200 para elementos de compressão principais
     (item 5.3.2). A verificação é alertada mas não impõe erro.
     """
-    lambda_o = _indice_esbeltez_reduzido(L, r, fy, E, k)
-    chi      = _fator_reducao_flambagem(lambda_o, curva)
-    return chi * Ag * fy / gama_a1, lambda_o, chi
+    lambda_o     = _indice_esbeltez_reduzido(L, r, fy, E, k)
+    lambda_o_eff = lambda_o * np.sqrt(Q)
+    chi          = _fator_reducao_flambagem(lambda_o_eff, curva)
+    return chi * Q * Ag * fy / gama_a1, lambda_o, chi
 
 
 # ---------------------------------------------------------------------------
@@ -276,20 +324,22 @@ def verificar_barras(dados, res_fea: dict,
     -------
     dict com as chaves:
 
-        'Nt_Rd'         : ndarray(n_el) — resistência à tração [N]
-        'Nc_Rd'         : ndarray(n_el) — resistência à compressão [N]
-        'N'             : ndarray(n_el) — esforço axial FEA [N] (+ = tração)
-        'lambda_o'      : ndarray(n_el) — índice de esbeltez reduzido [-]
-        'chi'           : ndarray(n_el) — fator de redução de flambagem [-]
-        'r'             : ndarray(n_el) — raio de giração [m]
-        'L'             : ndarray(n_el) — comprimento de cada barra [m]
-        'esbeltez_kLr'  : ndarray(n_el) — esbeltez geométrica k·L/r
-        'UC_tracao'     : ndarray(n_el) — taxa de utilização à tração  (N/Nt,Rd)
-        'UC_compressao' : ndarray(n_el) — taxa de utilização à compressão (|N|/Nc,Rd)
-        'UC_max'        : ndarray(n_el) — max(UC_tracao, UC_compressao) por barra
-        'aprovado'      : ndarray(n_el, bool) — True se UC_max ≤ 1,0
-        'UC_global'     : float — pior taxa de utilização (governa o projeto)
-        'alertas'       : list[str] — avisos (esbeltez excessiva, etc.)
+        'Nt_Rd'              : ndarray(n_el) — resistência à tração [N]
+        'Nc_Rd'              : ndarray(n_el) — resistência à compressão [N]
+        'N'                  : ndarray(n_el) — esforço axial FEA [N] (+ = tração)
+        'lambda_o'           : ndarray(n_el) — índice de esbeltez geométrico kL/r·√(fy/E)/π [-]
+        'chi'                : ndarray(n_el) — fator χ calculado com λo·√Q [-]
+        'Q'                  : ndarray(n_el) — fator de flambagem local (1,0 se não-esbelta)
+        'r'                  : ndarray(n_el) — raio de giração [m]
+        'L'                  : ndarray(n_el) — comprimento de cada barra [m]
+        'esbeltez_kLr'       : ndarray(n_el) — esbeltez geométrica k·L/r
+        'UC_tracao'          : ndarray(n_el) — taxa de utilização à tração  (N/Nt,Rd)
+        'UC_compressao'      : ndarray(n_el) — taxa de utilização à compressão (|N|/Nc,Rd)
+        'UC_max'             : ndarray(n_el) — max(UC_tracao, UC_compressao) por barra
+        'aprovado'           : ndarray(n_el, bool) — True se UC_max ≤ 1,0
+        'UC_global'          : float — pior taxa de utilização (governa o projeto)
+        'classificacao_local': list[str] — 'nao_esbelta' | 'esbelta' | 'invalida' por barra
+        'alertas'            : list[str] — avisos (esbeltez excessiva, seção esbelta, etc.)
     """
     if params is None:
         params = ParamNorma()
@@ -299,16 +349,23 @@ def verificar_barras(dados, res_fea: dict,
     conec = dados.conectividade
     n_el  = dados.n_el
 
-    L_arr    = np.zeros(n_el)
-    r_arr    = np.zeros(n_el)
-    lam_arr  = np.zeros(n_el)
-    chi_arr  = np.zeros(n_el)
-    klr_arr  = np.zeros(n_el)
-    Nt_arr   = np.zeros(n_el)
-    Nc_arr   = np.zeros(n_el)
-    UC_t_arr = np.zeros(n_el)
-    UC_c_arr = np.zeros(n_el)
-    alertas  = []
+    # D/t constante para o tipo de seção configurado (forma preservada na otimização)
+    D_t_global = (1.0 / params.beta_td
+                  if params.tipo_secao == 'CHS' and params.beta_td > 0
+                  else None)
+
+    L_arr       = np.zeros(n_el)
+    r_arr       = np.zeros(n_el)
+    lam_arr     = np.zeros(n_el)
+    chi_arr     = np.zeros(n_el)
+    klr_arr     = np.zeros(n_el)
+    Q_arr       = np.ones(n_el)
+    Nt_arr      = np.zeros(n_el)
+    Nc_arr      = np.zeros(n_el)
+    UC_t_arr    = np.zeros(n_el)
+    UC_c_arr    = np.zeros(n_el)
+    class_local = ['nao_esbelta'] * n_el
+    alertas     = []
 
     for el in range(n_el):
         ni, nj = conec[el]
@@ -316,11 +373,24 @@ def verificar_barras(dados, res_fea: dict,
         A = float(dados.areas[el])
         E = float(dados.E) if np.ndim(dados.E) == 0 else float(dados.E[el])
 
-        r       = params.raio_giracao(A)
-        kLr     = params.k_flambagem * L / r
+        # Flambagem local — Q para CHS (NBR 8800:2024 Seção 5.3.4.3)
+        Q = 1.0
+        if D_t_global is not None:
+            Q, cls = _fator_Q_chs(D_t_global, params.fy, E)
+            class_local[el] = cls
+            if cls == 'invalida':
+                alertas.append(
+                    f"Barra {el}: D/t = {D_t_global:.1f} > 0,45·E/fy = "
+                    f"{0.45 * E / params.fy:.0f} — seção fora do escopo "
+                    "normativo (NBR 8800:2024 Seção 5.3.4.3)")
+        Q_arr[el] = Q
+
+        r   = params.raio_giracao(A)
+        kLr = params.k_flambagem * L / r
         nc, lo, chi = Nc_Rd(A, params.fy, E, L, r,
-                             params.k_flambagem, params.gama_a1, params.curva)
-        nt      = Nt_Rd(A, params.fy, params.gama_a1)
+                             params.k_flambagem, params.gama_a1, params.curva,
+                             Q=Q)
+        nt  = Nt_Rd(A, params.fy, params.gama_a1)
 
         L_arr[el]   = L
         r_arr[el]   = r
@@ -330,34 +400,45 @@ def verificar_barras(dados, res_fea: dict,
         Nt_arr[el]  = nt
         Nc_arr[el]  = nc
 
-        # NBR 8800:2024 item 5.3.2: kL/r ≤ 200 em compressão
         if N[el] < 0 and kLr > 200:
             alertas.append(
                 f"Barra {el}: esbeltez k·L/r = {kLr:.1f} > 200 "
                 "(limite NBR 8800:2024 item 5.3.2)")
 
-        if N[el] >= 0.0:          # tração
+        if N[el] >= 0.0:
             UC_t_arr[el] = N[el] / nt if nt > 0 else np.inf
-        else:                      # compressão
+        else:
             UC_c_arr[el] = abs(N[el]) / nc if nc > 0 else np.inf
+
+    # Alerta resumido para seções esbeltas
+    n_esbelta = sum(1 for c in class_local if c == 'esbelta')
+    if n_esbelta > 0 and D_t_global is not None:
+        E_ref = float(dados.E) if np.ndim(dados.E) == 0 else float(dados.E[0])
+        alertas.insert(0,
+            f"Flambagem local: D/t = {D_t_global:.1f} > 0,15·E/fy = "
+            f"{0.15 * E_ref / params.fy:.0f} em {n_esbelta} barra(s) "
+            f"(Q_mín = {Q_arr[Q_arr > 0].min():.3f}) — "
+            "NBR 8800:2024 Seção 5.3.4.3")
 
     UC_max = np.maximum(UC_t_arr, UC_c_arr)
 
     return {
-        'Nt_Rd':         Nt_arr,
-        'Nc_Rd':         Nc_arr,
-        'N':             N,
-        'lambda_o':      lam_arr,
-        'chi':           chi_arr,
-        'r':             r_arr,
-        'L':             L_arr,
-        'esbeltez_kLr':  klr_arr,
-        'UC_tracao':     UC_t_arr,
-        'UC_compressao': UC_c_arr,
-        'UC_max':        UC_max,
-        'aprovado':      UC_max <= 1.0,
-        'UC_global':     float(UC_max.max()),
-        'alertas':       alertas,
+        'Nt_Rd':               Nt_arr,
+        'Nc_Rd':               Nc_arr,
+        'N':                   N,
+        'lambda_o':            lam_arr,
+        'chi':                 chi_arr,
+        'Q':                   Q_arr,
+        'r':                   r_arr,
+        'L':                   L_arr,
+        'esbeltez_kLr':        klr_arr,
+        'UC_tracao':           UC_t_arr,
+        'UC_compressao':       UC_c_arr,
+        'UC_max':              UC_max,
+        'aprovado':            UC_max <= 1.0,
+        'UC_global':           float(UC_max.max()),
+        'classificacao_local': class_local,
+        'alertas':             alertas,
     }
 
 
@@ -436,17 +517,21 @@ def constraints_norma(dados, params: ParamNorma = None):
 
         constrs.append({'type': 'ineq', 'fun': _ct})
 
-        # --- compressão / flambagem ---
+        # --- compressão / flambagem (global + local) ---
         def _cc(x, el=el):
             res = _analise_com_areas(x[:n_el])
             N_el = res['forcas_internas'][el]
-            if N_el >= 0:     # não está em compressão — restrição não governa
+            if N_el >= 0:
                 return 1.0
             A_el = float(x[el])
             E_el = E_ref if E_ref is not None else float(dados.E[el])
             r_el = params.raio_giracao(A_el)
+            Q    = 1.0
+            if params.tipo_secao == 'CHS' and params.beta_td > 0:
+                Q, _ = _fator_Q_chs(1.0 / params.beta_td, params.fy, E_el)
             nc, _, _ = Nc_Rd(A_el, params.fy, E_el, L_arr[el], r_el,
-                             params.k_flambagem, params.gama_a1, params.curva)
+                             params.k_flambagem, params.gama_a1, params.curva,
+                             Q=Q)
             return 1.0 - abs(N_el) / nc
 
         constrs.append({'type': 'ineq', 'fun': _cc})

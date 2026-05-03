@@ -579,6 +579,12 @@ class ConfigOtimizacao:
         Se fornecido, adiciona restrição de desigualdade: volume <= restricao_volume_max.
     metodo : str
         Método do scipy.optimize.minimize. Padrão: 'SLSQP'.
+    restricao_deslocamento_adm : float ou None
+        Deslocamento máximo admissível [m]. Se definido: max(|u|) ≤ δ_adm.
+        Sugestão: span / 300 para uso geral (treliças de cobertura).
+    restricao_esbeltez_max : float ou None
+        Esbeltez máxima k·L/r por barra. NBR 8800:2024 item 5.3.2: ≤ 200.
+        Requer param_norma (usa k_flambagem e raio_giracao).
     """
     otimizar_areas:       bool
     otimizar_geometria:   bool
@@ -601,6 +607,16 @@ class ConfigOtimizacao:
     # Se True, adiciona para cada barra:
     #   • restrição de tração:    1 − N/Nt,Rd ≥ 0
     #   • restrição de compressão: 1 − |N|/Nc,Rd ≥ 0 (com flambagem global)
+
+    # ── Restrições de projeto ─────────────────────────────────────────────────
+    restricao_deslocamento_adm: float = None
+    # Se definido: max(|u|) ≤ restricao_deslocamento_adm [m]
+    # Sugestão: span / 300  (vão / 300 para uso geral em treliças de cobertura)
+
+    restricao_esbeltez_max: float = None
+    # Se definido: k·L/r ≤ restricao_esbeltez_max por barra
+    # NBR 8800:2024 item 5.3.2: kL/r ≤ 200 para compressão principal
+    # Requer param_norma (usa k_flambagem e raio_giracao da seção)
 
 
 # ---------------------------------------------------------------------------
@@ -735,6 +751,28 @@ def otimizar(dados: TrelicaInput, config: ConfigOtimizacao,
                                  pn.k_flambagem, pn.gama_a1, pn.curva)
                 return 1.0 - abs(N_el) / nc
             constraints.append({'type': 'ineq', 'fun': _cc})
+
+    # --- Restrição de deslocamento máximo: max(|u|) ≤ δ_adm ---
+    if config.restricao_deslocamento_adm is not None:
+        _delta_adm = config.restricao_deslocamento_adm
+        def _rest_desl(x, _d=_delta_adm):
+            u = analise_fea(reconstruir_dados(x))['deslocamentos'].ravel()
+            return _d - float(np.abs(u).max())
+        constraints.append({'type': 'ineq', 'fun': _rest_desl})
+
+    # --- Restrição de esbeltez máxima: k·L/r ≤ restricao_esbeltez_max por barra ---
+    if config.restricao_esbeltez_max is not None:
+        _pn_e   = config.param_norma or ParamNorma()
+        _lam_mx = config.restricao_esbeltez_max
+        for el in range(dados.n_el):
+            def _cs(x, el=el, lm=_lam_mx, pn=_pn_e):
+                d      = reconstruir_dados(x)
+                ni, nj = d.conectividade[el]
+                L_el   = float(np.sqrt(np.sum((d.nos[nj] - d.nos[ni])**2)))
+                A_el   = float(d.areas[el])
+                r_el   = pn.raio_giracao(A_el)
+                return lm - pn.k_flambagem * L_el / r_el
+            constraints.append({'type': 'ineq', 'fun': _cs})
 
     # --- Callback: registra progresso por iteração ---
     historico: list[dict] = []

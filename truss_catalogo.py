@@ -34,19 +34,25 @@ def carregar_catalogo(caminho=None) -> pd.DataFrame:
     return df.sort_values('A_m2').reset_index(drop=True)
 
 
-def _uc_barra(N, A, r, L, E, param_norma):
+def _uc_barra(N, A, r, L, E, param_norma, D_t=None):
     """
     Taxa de utilização (UC) de uma barra usando propriedades reais do catálogo.
-    Usa r fornecido diretamente em vez da fórmula analítica de ParamNorma.
+
+    Usa r fornecido diretamente (do catálogo) em vez da fórmula analítica.
+    Quando D_t (D/t real do perfil) é fornecido, aplica redução Q por
+    flambagem local conforme NBR 8800:2024 Seção 5.3.4.3.
     """
-    from truss_norma import Nt_Rd, Nc_Rd
+    from truss_norma import Nt_Rd, Nc_Rd, _fator_Q_chs
     if N >= 0.0:
         nt = Nt_Rd(A, param_norma.fy, param_norma.gama_a1)
         return N / nt if nt > 0 else np.inf
     else:
+        Q = 1.0
+        if D_t is not None and param_norma.tipo_secao == 'CHS':
+            Q, _ = _fator_Q_chs(D_t, param_norma.fy, E)
         nc, _, _ = Nc_Rd(A, param_norma.fy, E, L, r,
                          param_norma.k_flambagem, param_norma.gama_a1,
-                         param_norma.curva)
+                         param_norma.curva, Q=Q)
         return abs(N) / nc if nc > 0 else np.inf
 
 
@@ -146,10 +152,14 @@ def snap_discreto(
             perfil = catalogo.loc[idx_cat[nome]]
             A_cat  = perfil['A_m2']
             r_cat  = perfil['r_m']
+            D_t_cat = (perfil['d_mm'] / perfil['t_mm']
+                       if 'd_mm' in catalogo.columns and perfil['t_mm'] > 0
+                       else None)
 
             for i in idxs:
                 E_i = float(E_arr) if np.ndim(E_arr) == 0 else float(E_arr[i])
-                uc  = _uc_barra(N[i], A_cat, r_cat, L_arr[i], E_i, param_norma)
+                uc  = _uc_barra(N[i], A_cat, r_cat, L_arr[i], E_i, param_norma,
+                                D_t=D_t_cat)
                 if uc > 1.0:
                     if idx_cat[nome] < len(catalogo) - 1:
                         idx_cat[nome] += 1
@@ -166,14 +176,18 @@ def snap_discreto(
     UC_por_barra     = np.zeros(n_el)
 
     for nome, idxs in grupos_ef.items():
-        perfil = catalogo.loc[idx_cat[nome]]
-        A_cat  = perfil['A_m2']
-        r_cat  = perfil['r_m']
+        perfil  = catalogo.loc[idx_cat[nome]]
+        A_cat   = perfil['A_m2']
+        r_cat   = perfil['r_m']
+        D_t_cat = (perfil['d_mm'] / perfil['t_mm']
+                   if 'd_mm' in catalogo.columns and perfil['t_mm'] > 0
+                   else None)
         for i in idxs:
             areas_fin[i]        = A_cat
             perfis_por_barra[i] = str(perfil['designacao'])
             E_i = float(E_arr) if np.ndim(E_arr) == 0 else float(E_arr[i])
-            UC_por_barra[i] = _uc_barra(N[i], A_cat, r_cat, L_arr[i], E_i, param_norma)
+            UC_por_barra[i] = _uc_barra(N[i], A_cat, r_cat, L_arr[i], E_i,
+                                         param_norma, D_t=D_t_cat)
         if not nome.startswith('_solo_'):
             perfis_grupos[nome] = perfil
 

@@ -89,10 +89,12 @@ class TrussCanvas(tk.Canvas):
         self._resultado = None
         self._modo      = None
 
-        # Slider de amplificação (modo deformada)
+        # Slider de amplificação e seletor de unidade (modo deformada)
         self._var_escala       = None
         self._scale_widget     = None
         self._escala_deformada = 1.0
+        self._var_unidade_desl = None
+        self._unit_widget      = None
 
         # Cache do catálogo CHS para lookup na legenda
         self._catalogo_cache = None
@@ -234,6 +236,16 @@ class TrussCanvas(tk.Canvas):
                 troughcolor='#d0d0d0',
                 font=('Segoe UI', 7),
             )
+            self._var_unidade_desl = tk.StringVar(value='mm')
+            self._unit_widget = tk.OptionMenu(
+                self, self._var_unidade_desl, 'mm', 'cm',
+                command=lambda _: self._redraw(),
+            )
+            self._unit_widget.config(
+                font=('Segoe UI', 8), bg='#f0f0f0',
+                activebackground='#e0e0e0',
+                highlightthickness=0, relief='flat', width=3,
+            )
         else:
             self._var_escala.set(auto)
             self._scale_widget.config(to=to_val)
@@ -244,6 +256,9 @@ class TrussCanvas(tk.Canvas):
         H = max(self.winfo_height(), 200)
         self.create_window(W - 6, H // 2, window=self._scale_widget,
                            anchor='e', tags='slider_win')
+        if self._unit_widget is not None:
+            self.create_window(W - 6, H // 2 - 100, window=self._unit_widget,
+                               anchor='e', tags='unit_win')
 
     def _on_escala_change(self):
         if self._modo == 'deformada' and self._var_escala:
@@ -307,10 +322,12 @@ class TrussCanvas(tk.Canvas):
                              tags='deformed')
 
         # Anotação: δ_max e fator de amplificação
-        u_max_mm = float(np.abs(u).max()) * 1e3
+        unit   = self._var_unidade_desl.get() if self._var_unidade_desl else 'mm'
+        factor = 1e3 if unit == 'mm' else 1e2
+        u_max_disp = float(np.abs(u).max()) * factor
         W = max(self.winfo_width(), 200)
         self.create_text(W // 2, 14, anchor='n',
-                         text=f'δ_max = {u_max_mm:.4f} mm   |   amplificação ×{int(esc)}',
+                         text=f'δ_max = {u_max_disp:.4f} {unit}   |   amplificação ×{int(esc)}',
                          font=('Segoe UI', 9, 'bold'), fill='#333333',
                          tags='def_info')
 
@@ -748,17 +765,19 @@ class TrussCanvas(tk.Canvas):
                 nos_hit[i, 0] = nos[i, 0] + esc * float(u[2 * i])
                 nos_hit[i, 1] = nos[i, 1] + esc * float(u[2 * i + 1])
 
+            unit   = self._var_unidade_desl.get() if self._var_unidade_desl else 'mm'
+            factor = 1e3 if unit == 'mm' else 1e2
             for i in range(self._dados.n_nos):
                 cx, cy = self._w2s(*nos_hit[i])
                 if math.hypot(sx - cx, sy - cy) < self._HIT:
-                    ux = float(u[2*i])     * 1e3
-                    uy = float(u[2*i + 1]) * 1e3
+                    ux = float(u[2*i])     * factor
+                    uy = float(u[2*i + 1]) * factor
                     ut = math.hypot(ux, uy)
                     return '\n'.join([
                         f'Nó {i}',
-                        f'δx = {ux:+.4f} mm',
-                        f'δy = {uy:+.4f} mm',
-                        f'δ  = {ut:.4f} mm',
+                        f'δx = {ux:+.4f} {unit}',
+                        f'δy = {uy:+.4f} {unit}',
+                        f'δ  = {ut:.4f} {unit}',
                     ])
 
             for el in range(self._dados.n_el):
