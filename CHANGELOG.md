@@ -448,10 +448,8 @@ Versionamento: `MAJOR.MINOR.PATCH`
   - Implementar na aba de otimização: lista de nós com checkbox "livre/fixo" para selecionar os nós internos que o otimizador pode mover; campos de bound X e Y por nó (ou global relativo à posição inicial)
   - Modo "shape": otimização simultânea de áreas + coordenadas dos nós livres
   - Modo "topologia" (avançado): remover barras com área → 0 em pós-processamento
-- [ ] **Restrição de deformação máxima — δ_adm = L/n**: atualmente não existe nenhuma restrição de deslocamento no otimizador; implementar como constraint SLSQP `max(|u|) ≤ δ_adm`
-  - GUI: campo "Deslocamento máximo admissível" com formato `L / n` (usuário informa `n`, ex: 250, 300, 500); L = vão total calculado automaticamente
-  - Engine: novo campo `restricao_deformacao_max: float = None` em `ConfigOtimizacao`; constraint `δ_adm − max(|deslocamentos|) ≥ 0` adicionada em `otimizar()`
-  - Exibir na interface o δ_max calculado vs. δ_adm após dimensionamento
+- [x] ~~**Restrição de deslocamento máximo — δ_adm = L/n**~~ *(v0.9.7 — `restricao_deslocamento_adm` em `ConfigOtimizacao`, aba "Restrições" na GUI)*
+- [x] ~~**Esbeltez máxima enforçada como constraint — k·L/r ≤ λ_max**~~ *(v0.9.7 — `restricao_esbeltez_max` em `ConfigOtimizacao`)*
 
 ### Roadmaps
 - [ ] **Snap Fase B**: otimização geométrica (nós) + snap discreto em loop iterativo — refinamento combinado geometria × perfis de catálogo *(Fase A — snap de áreas contínuas → perfis discretos — já implementada em v0.8–0.9)*
@@ -473,4 +471,48 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ---
 
-*Atualizado em 2026-05-03 (v0.9.6).*
+## Estratégia de Publicação (artigo científico)
+
+*Discussão: Prof. Augusto Wanderlind (orientador PIBIC), Prof. Rafael Holdorf Lopez (orientador mestrado UFSC/CORE)*  
+*Referência pesquisa: 2026-05-06*
+
+### Lacuna identificada na literatura
+
+Nenhum paper indexado (até mai/2026) combina otimização de treliças com NBR 8800 (qualquer versão) ou NBR 16239. A literatura internacional usa AISC 360, EN 1993, ou apenas limites de tensão/deslocamento sem norma específica. Catálogo real de fabricante (Vallourec CHS) nunca foi usado para quantificar o gap contínuo→discreto de forma rigorosa.
+
+### Ângulos possíveis
+
+**Ângulo 1 — Lacuna NBR (mais forte para LAJSS / Structures)**  
+Primeiro otimizador dimensional + geométrico de treliças com constraints NBR 8800:2024 e NBR 16239:2013 completas: fator Q de flambagem local, curvas europeias χ (curva 'a'), δ_adm e k·L/r como constraints do SLSQP. Aplicado a perfis CHS do catálogo Vallourec.
+
+**Ângulo 2 — SLSQP vs. metaheurística com norma completa**  
+Aproveitar o debate aberto (SMO 2025): SLSQP bate metaheurísticas com menos avaliações. A novidade aqui é o conjunto de constraints normativas NBR — ninguém fez essa comparação nesse cenário. Para a metaheurística (GA/PSO), usar a técnica de variáveis mistas do Prof. Rafael (Aula 09): o algoritmo opera em espaço contínuo (0, N_cat) e internamente mapeia `x_i = Ω(ceil(x_i))` para o perfil do catálogo. SLSQP usa o snap pós-otimização. Os dois paradigmas com suas estratégias naturais de discretização.
+
+**Ângulo 3 — Custo da discretização**  
+Quantificar sistematicamente o acréscimo de peso (%) ao passar do ótimo contínuo para o perfil mais próximo do catálogo, em função da geometria da treliça (vão, altura, inclinação). Mencionado como lacuna na literatura, nunca medido com catálogo real.
+
+**Ângulo 4 — Fator Q como constraint ativa**  
+Demonstrar casos onde ignorar Q leva a ótimos não-conservadores e que incluí-lo desloca a solução para um perfil mais pesado mas normativo. Contribuição direta para as literaturas de otimização e de projeto em CHS.
+
+**Ângulo 5 — Ferramenta open-source reprodutível**  
+Documentar o TRELICA_APP como entregável do artigo. Vários papers MDPI recentes têm a ferramenta como contribuição principal; aumenta valor de citação e beneficia a comunidade latino-americana.
+
+### Combinação recomendada
+
+**Ângulos 1 + 3 + 4** num artigo único (target: *LAJSS* ou *Structures*, IF ~1.5–3.5):
+> *"Otimização dimensional e geométrica de treliças planas em perfis CHS segundo NBR 8800:2024: flambagem local e custo da discretização para catálogo comercial"*
+
+O Ângulo 2 (comparação com metaheurística + técnica Ω(ceil)) é o mais rico metodologicamente e conecta diretamente ao mestrado; pode entrar como extensão ou segundo artigo.
+
+### O que ainda falta para o artigo
+
+- [ ] **Benchmark 25-bar** (mais citado para size+shape além do 10-bar): implementar em `truss_engine` e validar
+- [ ] **Experimento de discretização**: rodar contínuo + snap para N combinações de geometria e tabular Δpeso
+- [ ] **Casos com Q < 1**: encontrar (ou construir) configuração onde flambagem local é ativa no ótimo
+- [ ] **Caso de aplicação real**: cobertura de galpão ou passarela (mesmo simplificada) — eleva relevância prática
+- [ ] **Bug save/JSON**: converter NaN → None antes de `json.dump` em `cmd_salvar_projeto` (seções com D/t/m opcional)
+- [ ] **Validação cruzada com Emily**: mesmo exemplo → comparar N, Nc,Rd, Nt,Rd, UC por barra (após correção bug `dy²/L` e atualização χ NBR 2024 no notebook dela)
+
+---
+
+*Atualizado em 2026-05-06 (v0.9.7).*
