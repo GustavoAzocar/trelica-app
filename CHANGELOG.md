@@ -10,6 +10,27 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.9.8] — 2026-05-07
+
+### Adicionado
+- **`truss_gui.py` — otimização de forma (shape optimization) na GUI**:
+  - Nova aba "Geometria" no painel ☰ Configurar Análise
+  - Checkbox "Incluir otimização de forma (mover nós)"
+  - Campo para os IDs dos nós livres (separados por vírgula) + botão **Auto** (detecta automaticamente todos os nós sem apoio)
+  - Campos ±ΔX e ±ΔY: limites de deslocamento de cada nó em relação à posição inicial; bounds absolutos = posição_inicial ± Δ
+  - `cmd_otimizar()` constrói `nos_geometria_livre` e `bounds_nos` e passa `otimizar_geometria=True` à `ConfigOtimizacao`
+  - Log da otimização exibe nós livres, ΔX/ΔY e número de variáveis (áreas + coordenadas)
+
+### Notas técnicas
+- O engine (`truss_engine.py`) já suportava `otimizar_geometria` desde a versão 0.8 — esta versão apenas expõe a funcionalidade na GUI
+- `bounds_nos` é calculado em runtime (no `cmd_otimizar`) a partir das coordenadas reais do `TrelicaInput`, garantindo que os bounds acompanhem a geometria atual mesmo após carregamento de arquivo
+- Usando ΔX = 0 é possível restringir nós a movimento puramente vertical (útil para nós do banzo inferior que não devem mudar de x)
+
+### Pendências resolvidas nesta versão
+- [x] ~~**Otimização de forma e topologia — GUI** (exposição do `otimizar_geometria` na GUI)~~
+
+---
+
 ## [0.9.7] — 2026-05-03
 
 ### Adicionado
@@ -444,10 +465,8 @@ Versionamento: `MAJOR.MINOR.PATCH`
 - [ ] **Validação normativa — comparação cruzada com artigo**: validar `truss_norma.py` (App) e o notebook da Emily (`Trelica_REV03_tubular_`) contra um mesmo exemplo de artigo; verificar N, Nc,Rd, Nt,Rd e UC por barra; confirmar alinhamento com NBR 8800:2024 (χ pela curva europeia — o notebook da Emily usa fórmula da NBR 8800:2008 revogada); observações adicionais: bug `s = dy²/L` no notebook da Emily precisa ser corrigido antes da rodada de validação; notebook `VALIDACAO_truss_norma.ipynb` criado, aguarda exemplo de artigo
 
 ### Otimizador
-- [ ] **Otimização de forma e topologia — GUI**: o engine (`truss_engine.py`) **já suporta** `otimizar_geometria=True` e `nos_geometria_livre` em `ConfigOtimizacao`, mas a GUI fixa `otimizar_geometria=False` e nunca expõe essa funcionalidade
-  - Implementar na aba de otimização: lista de nós com checkbox "livre/fixo" para selecionar os nós internos que o otimizador pode mover; campos de bound X e Y por nó (ou global relativo à posição inicial)
-  - Modo "shape": otimização simultânea de áreas + coordenadas dos nós livres
-  - Modo "topologia" (avançado): remover barras com área → 0 em pós-processamento
+- [x] ~~**Otimização de forma — GUI** (aba "Geometria" com nós livres, ΔX/ΔY e botão Auto)~~ *(v0.9.8)*
+- [ ] **Topologia** (avançado): remover barras com área → 0 em pós-processamento do snap
 - [x] ~~**Restrição de deslocamento máximo — δ_adm = L/n**~~ *(v0.9.7 — `restricao_deslocamento_adm` em `ConfigOtimizacao`, aba "Restrições" na GUI)*
 - [x] ~~**Esbeltez máxima enforçada como constraint — k·L/r ≤ λ_max**~~ *(v0.9.7 — `restricao_esbeltez_max` em `ConfigOtimizacao`)*
 

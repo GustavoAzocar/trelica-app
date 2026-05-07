@@ -235,6 +235,12 @@ class TrussApp(tk.Tk):
         self._var_esbeltez_ativo = tk.BooleanVar(value=False)
         self._var_esbeltez_max   = tk.StringVar(value='200')
 
+        # Otimização de forma (geometria) — nós livres e bounds
+        self._var_geom_ativo   = tk.BooleanVar(value=False)
+        self._var_geom_nos     = tk.StringVar(value='')    # id_no separados por vírgula
+        self._var_geom_delta_x = tk.StringVar(value='0.50')  # ±ΔX [m]
+        self._var_geom_delta_y = tk.StringVar(value='0.50')  # ±ΔY [m]
+
         # Indicadores de conclusão de cada etapa de entrada
         # chave → tk.StringVar com símbolo (○ pendente, ✓ concluído)
         self._etapas: dict = {
@@ -1420,10 +1426,42 @@ class TrussApp(tk.Tk):
             except ValueError:
                 pass
 
+        # Otimização de forma — nós livres e bounds
+        nos_livres  = []
+        bounds_nos  = []
+        geom_dx = geom_dy = 0.0
+        if self._var_geom_ativo.get():
+            try:
+                geom_dx = float(self._var_geom_delta_x.get())
+                geom_dy = float(self._var_geom_delta_y.get())
+                raw = self._var_geom_nos.get().strip()
+                if raw:
+                    # converte id_no → índice posicional (mesmo critério de truss_input)
+                    nos_ord    = self.dfs['nos'].sort_values('id_no').reset_index(drop=True)
+                    id_para_idx = {int(r.id_no): i for i, r in nos_ord.iterrows()}
+                    for tok in raw.split(','):
+                        tok = tok.strip()
+                        if not tok:
+                            continue
+                        id_no = int(tok)
+                        if id_no not in id_para_idx:
+                            continue
+                        idx = id_para_idx[id_no]
+                        x0, y0 = float(dados.nos[idx, 0]), float(dados.nos[idx, 1])
+                        nos_livres.append(idx)
+                        bounds_nos += [(x0 - geom_dx, x0 + geom_dx),
+                                       (y0 - geom_dy, y0 + geom_dy)]
+            except ValueError:
+                pass
+
+        n_vars_geom = len(nos_livres) * 2
+
         cfg = ConfigOtimizacao(
             otimizar_areas=True,
-            otimizar_geometria=False,
+            otimizar_geometria=bool(nos_livres),
             bounds_areas=[(A_min, A_max)] * dados.n_el,
+            nos_geometria_livre=nos_livres,
+            bounds_nos=bounds_nos,
             objetivo='volume',
             usar_restricoes_norma=True,
             param_norma=self._param_norma,
@@ -1434,8 +1472,20 @@ class TrussApp(tk.Tk):
         # Prepara log e indicadores
         self._log_clear()
         self._log_append('▶ Otimizador iniciado')
-        self._log_append(f'  Barras: {dados.n_el}   Variáveis: {dados.n_el}')
+        n_vars_total = dados.n_el + n_vars_geom
+        if n_vars_geom:
+            self._log_append(
+                f'  Barras: {dados.n_el}   Variáveis: {n_vars_total}'
+                f' ({dados.n_el} áreas + {n_vars_geom} coords)'
+            )
+        else:
+            self._log_append(f'  Barras: {dados.n_el}   Variáveis: {n_vars_total}')
         self._log_append(f'  Vol. inicial: {dados.volume_total()*1e6:.1f} cm³')
+        if nos_livres:
+            self._log_append(
+                f'  Nós livres: {[self.dfs["nos"].sort_values("id_no").iloc[i]["id_no"] for i in nos_livres]}'
+                f'  ΔX=±{geom_dx:.2f}m  ΔY=±{geom_dy:.2f}m'
+            )
         if delta_adm is not None:
             self._log_append(f'  δ_adm: L/{n_desl:.0f} = {delta_adm*1e3:.1f} mm')
         if esbeltez_max is not None:
@@ -1889,6 +1939,76 @@ class TrussApp(tk.Tk):
                   text='k e β utilizados: definidos nas abas Norma / Seção.',
                   foreground='gray', font=('Segoe UI', 8)).grid(
                   row=8, column=0, columnspan=3, sticky='w')
+
+        # ── Aba: Geometria ────────────────────────────────────────────────
+        frm_geom = ttk.Frame(nb, padding=12)
+        nb.add(frm_geom, text='  Geometria  ')
+
+        ttk.Label(frm_geom, text='Otimização de forma (etapa 9):',
+                  font=('Segoe UI', 10, 'bold')).grid(
+                  row=0, column=0, columnspan=3, sticky='w', pady=(0, 6))
+
+        ttk.Separator(frm_geom, orient='horizontal').grid(
+            row=1, column=0, columnspan=3, sticky='ew', pady=(0, 8))
+
+        ttk.Checkbutton(frm_geom, text='Incluir otimização de forma (mover nós)',
+                        variable=self._var_geom_ativo).grid(
+                        row=2, column=0, columnspan=3, sticky='w')
+
+        ttk.Separator(frm_geom, orient='horizontal').grid(
+            row=3, column=0, columnspan=3, sticky='ew', pady=8)
+
+        ttk.Label(frm_geom, text='Nós livres (id_no, separados por vírgula):',
+                  ).grid(row=4, column=0, columnspan=3, sticky='w', pady=(0, 4))
+
+        frm_nos_row = ttk.Frame(frm_geom)
+        frm_nos_row.grid(row=5, column=0, columnspan=3, sticky='ew', pady=(0, 4))
+
+        nos_entry = ttk.Entry(frm_nos_row, textvariable=self._var_geom_nos, width=30)
+        nos_entry.pack(side='left', padx=(0, 6))
+
+        def _auto_detectar_nos():
+            try:
+                apoio_ids = set(self.dfs['apoios']['id_no'].astype(int).tolist())
+                todos_ids = sorted(self.dfs['nos']['id_no'].astype(int).tolist())
+                livres = [str(n) for n in todos_ids if n not in apoio_ids]
+                self._var_geom_nos.set(', '.join(livres))
+            except Exception:
+                messagebox.showwarning(
+                    "Sem dados", "Carregue os nós e apoios antes de auto-detectar.",
+                    parent=win)
+
+        ttk.Button(frm_nos_row, text='Auto', command=_auto_detectar_nos, width=6
+                   ).pack(side='left')
+        ttk.Label(frm_nos_row, text='(nós sem apoio)',
+                  foreground='gray', font=('Segoe UI', 8)).pack(side='left', padx=6)
+
+        ttk.Separator(frm_geom, orient='horizontal').grid(
+            row=6, column=0, columnspan=3, sticky='ew', pady=8)
+
+        ttk.Label(frm_geom, text='Deslocamento máximo por nó (relativo à posição inicial):'
+                  ).grid(row=7, column=0, columnspan=3, sticky='w', pady=(0, 6))
+
+        ttk.Label(frm_geom, text='±ΔX  ').grid(row=8, column=0, sticky='e', padx=(20, 2))
+        ttk.Entry(frm_geom, textvariable=self._var_geom_delta_x, width=8
+                  ).grid(row=8, column=1, sticky='w')
+        ttk.Label(frm_geom, text='m', foreground='gray', font=('Segoe UI', 8)
+                  ).grid(row=8, column=2, sticky='w', padx=4)
+
+        ttk.Label(frm_geom, text='±ΔY  ').grid(row=9, column=0, sticky='e', padx=(20, 2), pady=4)
+        ttk.Entry(frm_geom, textvariable=self._var_geom_delta_y, width=8
+                  ).grid(row=9, column=1, sticky='w')
+        ttk.Label(frm_geom, text='m', foreground='gray', font=('Segoe UI', 8)
+                  ).grid(row=9, column=2, sticky='w', padx=4)
+
+        ttk.Separator(frm_geom, orient='horizontal').grid(
+            row=10, column=0, columnspan=3, sticky='ew', pady=(8, 4))
+
+        ttk.Label(frm_geom,
+                  text='Bounds absolutos = posição inicial ± ΔX / ΔY.\n'
+                       'Use ΔX=0 para nós que só podem mover verticalmente.',
+                  foreground='gray', font=('Segoe UI', 8)).grid(
+                  row=11, column=0, columnspan=3, sticky='w')
 
         # ── Botões Aplicar / Cancelar ─────────────────────────────────────
         frm_btn = ttk.Frame(win)
