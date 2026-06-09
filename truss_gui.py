@@ -335,7 +335,7 @@ class TrussApp(tk.Tk):
                 ("8  Dimensionar Estrutura",  self.cmd_dimensionar,  None),
                 ("9  Otimizar Estrutura",     self.cmd_otimizar,     None),
                 ("10  Resultados",            self.cmd_resultados,     None),
-                ("11  Snap Discreto",         self.cmd_snap_discreto,  None),
+                ("11  Otimizar Perfil Comercial", self.cmd_snap_discreto,  None),
             ],
         ]
 
@@ -1095,7 +1095,7 @@ class TrussApp(tk.Tk):
         from tkinter import ttk
 
         win = tk.Toplevel(self)
-        win.title("Snap Discreto — Perfis Comerciais Selecionados")
+        win.title("Otimizar Perfil Comercial — Perfis Selecionados")
         win.geometry("820x540")
 
         nb = ttk.Notebook(win)
