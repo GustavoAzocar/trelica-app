@@ -1133,7 +1133,7 @@ class TrussApp(tk.Tk):
         frm2 = ttk.Frame(nb)
         nb.add(frm2, text='FF por Barra')
 
-        cols2 = ('Barra', 'Grupo', 'Perfil', 'A (cm²)', 'FF', 'Status')
+        cols2 = ('Barra', 'Grupo', 'Perfil', 'A (cm²)', '%', 'Status')
         tree2 = ttk.Treeview(frm2, columns=cols2, show='headings', height=18)
         for c in cols2:
             tree2.heading(c, text=c)
@@ -1162,7 +1162,7 @@ class TrussApp(tk.Tk):
                 nome_g,
                 perfis_por_barra[i],
                 A_cm2_str,
-                f"{uc:.3f}",
+                f"{uc*100:.1f}",
                 status,
             ))
 
