@@ -10,6 +10,21 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.9.9] — 2026-05-07
+
+### Alterado (terminologia e labels da GUI)
+- **UC → FF (Fator de Falha)**: renomeada a grandeza em todo o código e na interface
+  - Chaves do dict de saída de `verificar_barras`: `UC_tracao/UC_compressao/UC_max/UC_global` → `FF_tracao/FF_compressao/FF_max/FF_global`
+  - Função `_uc_barra` → `_ff_barra`; variável `UC_por_barra` → `FF_por_barra` em `truss_catalogo.py`
+  - Método `_mostrar_uc_chart` → `_mostrar_ff_chart`; todos os labels, títulos e status bar atualizados
+  - Tooltip de hover na canvas: `UC = 0.xxx` → `FF = 0.xxx`
+- **Coluna FF na tabela snap**: cabeçalho `FF` → `%`; valores exibidos em porcentagem (0–100, 1 casa decimal). Ex: `0.426` → `42.6`
+- **Botão "Snap Discreto"** → **"Otimizar Perfil Comercial"** (barra lateral, etapa 11)
+- **Botão "Aceitar e Dimensionar com Snap"** → **"Aceitar e Dimensionar com Perfil Comercial"** (janela de resultados)
+- Título da janela de resultados: `"Snap Discreto — Perfis Comerciais Selecionados"` → `"Otimizar Perfil Comercial — Perfis Selecionados"`
+
+---
+
 ## [0.9.8] — 2026-05-07
 
 ### Adicionado

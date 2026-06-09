@@ -1095,7 +1095,7 @@ class TrussApp(tk.Tk):
         from tkinter import ttk
 
         win = tk.Toplevel(self)
-        win.title("Otimizar Perfil Comercial — Perfis Selecionados")
+        win.title("Otimizar Perfil Comercial")
         win.geometry("820x540")
 
         nb = ttk.Notebook(win)
@@ -1197,7 +1197,7 @@ class TrussApp(tk.Tk):
         btn_frame.pack(fill='x', padx=10, pady=(2, 10))
         ttk.Button(
             btn_frame,
-            text="✔  Aceitar e Dimensionar com Snap",
+            text="✔  Aceitar e Dimensionar com Perfil Comercial",
             command=lambda: self._aceitar_snap(resultado, win),
         ).pack(side='right')
 
