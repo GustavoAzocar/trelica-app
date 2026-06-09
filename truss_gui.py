@@ -934,20 +934,20 @@ class TrussApp(tk.Tk):
             ('deformada', dados, res, 'Forma Deformada'),
         ])
 
-        # ── Aba UC por barra (matplotlib) em Toplevel ─────────────────────
-        self._mostrar_uc_chart(norma, dados.n_el)
+        # ── Aba FF por barra (matplotlib) em Toplevel ─────────────────────
+        self._mostrar_ff_chart(norma, dados.n_el)
 
         # ── Alertas de esbeltez ───────────────────────────────────────────
         alertas_txt = ''
         if norma['alertas']:
             alertas_txt = '\n\nAlertas:\n' + '\n'.join(f'  {a}' for a in norma['alertas'])
 
-        reprovadas = int((norma['UC_max'] > 1.0).sum())
+        reprovadas = int((norma['FF_max'] > 1.0).sum())
         W = float(res['compliance'])
         V = dados.volume_total()
 
         self._set_status(
-            f"Dimensionamento concluído  |  UC máx = {norma['UC_global']:.3f}  "
+            f"Dimensionamento concluído  |  FF máx = {norma['FF_global']:.3f}  "
             f"| Barras reprovadas: {reprovadas}  |  V = {V*1e6:.2f} cm³")
         messagebox.showinfo(
             "Dimensionamento concluído",
@@ -958,8 +958,8 @@ class TrussApp(tk.Tk):
             f"γa1 = {self._param_norma.gama_a1}  |  "
             f"Curva {self._param_norma.curva.upper()}  |  "
             f"Seção: {self._param_norma.tipo_secao}\n\n"
-            f"UC global (pior barra): {norma['UC_global']:.3f}  "
-            + ('✓ OK' if norma['UC_global'] <= 1.0 else '✗ REPROVADO')
+            f"FF global (pior barra): {norma['FF_global']:.3f}  "
+            + ('✓ OK' if norma['FF_global'] <= 1.0 else '✗ REPROVADO')
             + f"\nBarras reprovadas: {reprovadas} / {n_el}"
             + alertas_txt
             + "\n\nSalvo como benchmark para a otimização."
@@ -985,27 +985,27 @@ class TrussApp(tk.Tk):
             "Use o slider para ajustar a amplificação visual."
         )
 
-    def _mostrar_uc_chart(self, norma, n_el: int):
-        """Abre Toplevel com gráfico de barras de UC por barra (matplotlib)."""
+    def _mostrar_ff_chart(self, norma, n_el: int):
+        """Abre Toplevel com gráfico de barras de FF por barra (matplotlib)."""
         top = tk.Toplevel(self.root)
-        top.title("Taxa de Utilização por Barra")
+        top.title("Fator de Falha por Barra")
         top.geometry("750x340")
 
         fig, ax = plt.subplots(figsize=(9, 3.5))
-        UC    = norma['UC_max']
-        cores = ['#d62728' if uc > 1.0 else '#2ca02c' if uc < 0.8
-                 else '#ff7f0e' for uc in UC]
-        ax.bar(range(n_el), UC, color=cores, edgecolor='none', width=0.8)
-        ax.axhline(1.0, color='red',    lw=1.5, ls='--', label='Limite (UC=1,0)')
-        ax.axhline(0.8, color='orange', lw=1.0, ls=':',  label='Alerta (UC=0,8)')
+        FF    = norma['FF_max']
+        cores = ['#d62728' if ff > 1.0 else '#2ca02c' if ff < 0.8
+                 else '#ff7f0e' for ff in FF]
+        ax.bar(range(n_el), FF, color=cores, edgecolor='none', width=0.8)
+        ax.axhline(1.0, color='red',    lw=1.5, ls='--', label='Limite (FF=1,0)')
+        ax.axhline(0.8, color='orange', lw=1.0, ls=':',  label='Alerta (FF=0,8)')
         ax.set_xlabel('Barra')
-        ax.set_ylabel('UC')
+        ax.set_ylabel('FF')
         ax.set_title(
-            f'Verificação NBR 8800 / NBR 16239  —  UC máx = {norma["UC_global"]:.3f}'
-            + ('  ✓ OK' if norma['UC_global'] <= 1.0 else '  ✗ REPROVADO'),
+            f'Verificação NBR 8800 / NBR 16239  —  FF máx = {norma["FF_global"]:.3f}'
+            + ('  ✓ OK' if norma['FF_global'] <= 1.0 else '  ✗ REPROVADO'),
             fontsize=9)
         ax.set_xlim(-0.5, n_el - 0.5)
-        ax.set_ylim(0, max(float(UC.max()) * 1.15, 1.1))
+        ax.set_ylim(0, max(float(FF.max()) * 1.15, 1.1))
         ax.legend(fontsize=8)
         ax.grid(axis='y', alpha=0.3)
         fig.tight_layout()
@@ -1090,7 +1090,7 @@ class TrussApp(tk.Tk):
         self._mostrar_resultado_snap(resultado, grupos)
 
     def _mostrar_resultado_snap(self, resultado, grupos):
-        """Exibe janela com os perfis selecionados e UC final por barra."""
+        """Exibe janela com os perfis selecionados e FF final por barra."""
         import tkinter as tk
         from tkinter import ttk
 
@@ -1129,11 +1129,11 @@ class TrussApp(tk.Tk):
         tree1.pack(side='left', fill='both', expand=True)
         sb1.pack(side='right', fill='y')
 
-        # ── Aba 2: UC por barra ───────────────────────────────────────────────
+        # ── Aba 2: FF por barra ───────────────────────────────────────────────
         frm2 = ttk.Frame(nb)
-        nb.add(frm2, text='UC por Barra')
+        nb.add(frm2, text='FF por Barra')
 
-        cols2 = ('Barra', 'Grupo', 'Perfil', 'A (cm²)', 'UC', 'Status')
+        cols2 = ('Barra', 'Grupo', 'Perfil', 'A (cm²)', 'FF', 'Status')
         tree2 = ttk.Treeview(frm2, columns=cols2, show='headings', height=18)
         for c in cols2:
             tree2.heading(c, text=c)
@@ -1143,11 +1143,11 @@ class TrussApp(tk.Tk):
         tree2.column('Perfil', width=130, anchor='w')
 
         perfis_por_barra = resultado['perfis_por_barra']
-        UC_por_barra     = resultado['UC_por_barra']
+        FF_por_barra     = resultado['FF_por_barra']
 
         barra_para_grupo = {i: g for g, idxs in grupos.items() for i in idxs}
         for i in range(len(perfis_por_barra)):
-            uc     = UC_por_barra[i]
+            uc     = FF_por_barra[i]
             status = '✓' if uc <= 1.0 else '✗ REPROVA'
             tag    = 'ok' if uc <= 1.0 else 'fail'
             nome_g = barra_para_grupo.get(i, '(solo)')
@@ -1182,7 +1182,7 @@ class TrussApp(tk.Tk):
         V_disc = resultado['volume_discreto']
         massa  = resultado['massa_total_kg']
         n_iter = resultado['iteracoes']
-        n_repr = int((UC_por_barra > 1.0).sum())
+        n_repr = int((FF_por_barra > 1.0).sum())
 
         ttk.Label(resumo, text=(
             f"Volume contínuo: {V_cont*1e6:.1f} cm³   →   "
@@ -1228,10 +1228,10 @@ class TrussApp(tk.Tk):
         self._res_fea_snap = res_fea
         win.destroy()
 
-        n_repr = int((norma['UC_max'] > 1.0).sum())
-        UC_max = float(norma['UC_max'].max())
+        n_repr = int((norma['FF_max'] > 1.0).sum())
+        FF_max = float(norma['FF_max'].max())
         self._set_status(
-            f"Snap dimensionado — UC_max: {UC_max:.3f}  |  "
+            f"Snap dimensionado — FF_max: {FF_max:.3f}  |  "
             f"Barras reprovadas: {n_repr}  |  "
             f"Vol: {dados_disc.volume_total()*1e6:.1f} cm³"
         )
@@ -2084,7 +2084,7 @@ class TrussApp(tk.Tk):
             "   Exibe deslocamentos e esforços internos (N) por barra.\n\n"
             "⑨ Otimizar Estrutura\n"
             "   Minimiza o volume de aço (∝ massa e custo) sujeito a\n"
-            "   restrições de resistência por barra (UC ≤ 1,0, NBR 8800).\n"
+            "   restrições de resistência por barra (FF ≤ 1,0, NBR 8800).\n"
         )
 
         txt_w = tk.Text(frm_fluxo, wrap='word', font=('Courier New', 10),

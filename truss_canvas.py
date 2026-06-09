@@ -823,9 +823,9 @@ class TrussCanvas(tk.Canvas):
                     tipo = 'Tração' if Nv >= 0 else 'Compressão'
                     lines += [f'N = {Nv/1e3:.2f} kN  ({tipo})']
                 if self._resultado and 'norma' in self._resultado:
-                    UC = float(self._resultado['norma']['UC_max'][el])
-                    cor = '✓' if UC <= 1.0 else '✗'
-                    lines.append(f'UC = {UC:.3f}  {cor}')
+                    FF = float(self._resultado['norma']['FF_max'][el])
+                    cor = '✓' if FF <= 1.0 else '✗'
+                    lines.append(f'FF = {FF:.3f}  {cor}')
                 return '\n'.join(lines)
 
         return None

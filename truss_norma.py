@@ -333,11 +333,11 @@ def verificar_barras(dados, res_fea: dict,
         'r'                  : ndarray(n_el) — raio de giração [m]
         'L'                  : ndarray(n_el) — comprimento de cada barra [m]
         'esbeltez_kLr'       : ndarray(n_el) — esbeltez geométrica k·L/r
-        'UC_tracao'          : ndarray(n_el) — taxa de utilização à tração  (N/Nt,Rd)
-        'UC_compressao'      : ndarray(n_el) — taxa de utilização à compressão (|N|/Nc,Rd)
-        'UC_max'             : ndarray(n_el) — max(UC_tracao, UC_compressao) por barra
-        'aprovado'           : ndarray(n_el, bool) — True se UC_max ≤ 1,0
-        'UC_global'          : float — pior taxa de utilização (governa o projeto)
+        'FF_tracao'          : ndarray(n_el) — fator de falha à tração  (N/Nt,Rd)
+        'FF_compressao'      : ndarray(n_el) — fator de falha à compressão (|N|/Nc,Rd)
+        'FF_max'             : ndarray(n_el) — max(FF_tracao, FF_compressao) por barra
+        'aprovado'           : ndarray(n_el, bool) — True se FF_max ≤ 1,0
+        'FF_global'          : float — pior fator de falha (governa o projeto)
         'classificacao_local': list[str] — 'nao_esbelta' | 'esbelta' | 'invalida' por barra
         'alertas'            : list[str] — avisos (esbeltez excessiva, seção esbelta, etc.)
     """
@@ -362,8 +362,8 @@ def verificar_barras(dados, res_fea: dict,
     Q_arr       = np.ones(n_el)
     Nt_arr      = np.zeros(n_el)
     Nc_arr      = np.zeros(n_el)
-    UC_t_arr    = np.zeros(n_el)
-    UC_c_arr    = np.zeros(n_el)
+    FF_t_arr    = np.zeros(n_el)
+    FF_c_arr    = np.zeros(n_el)
     class_local = ['nao_esbelta'] * n_el
     alertas     = []
 
@@ -406,9 +406,9 @@ def verificar_barras(dados, res_fea: dict,
                 "(limite NBR 8800:2024 item 5.3.2)")
 
         if N[el] >= 0.0:
-            UC_t_arr[el] = N[el] / nt if nt > 0 else np.inf
+            FF_t_arr[el] = N[el] / nt if nt > 0 else np.inf
         else:
-            UC_c_arr[el] = abs(N[el]) / nc if nc > 0 else np.inf
+            FF_c_arr[el] = abs(N[el]) / nc if nc > 0 else np.inf
 
     # Alerta resumido para seções esbeltas
     n_esbelta = sum(1 for c in class_local if c == 'esbelta')
@@ -420,7 +420,7 @@ def verificar_barras(dados, res_fea: dict,
             f"(Q_mín = {Q_arr[Q_arr > 0].min():.3f}) — "
             "NBR 8800:2024 Seção 5.3.4.3")
 
-    UC_max = np.maximum(UC_t_arr, UC_c_arr)
+    FF_max = np.maximum(FF_t_arr, FF_c_arr)
 
     return {
         'Nt_Rd':               Nt_arr,
@@ -432,11 +432,11 @@ def verificar_barras(dados, res_fea: dict,
         'r':                   r_arr,
         'L':                   L_arr,
         'esbeltez_kLr':        klr_arr,
-        'UC_tracao':           UC_t_arr,
-        'UC_compressao':       UC_c_arr,
-        'UC_max':              UC_max,
-        'aprovado':            UC_max <= 1.0,
-        'UC_global':           float(UC_max.max()),
+        'FF_tracao':           FF_t_arr,
+        'FF_compressao':       FF_c_arr,
+        'FF_max':              FF_max,
+        'aprovado':            FF_max <= 1.0,
+        'FF_global':           float(FF_max.max()),
         'classificacao_local': class_local,
         'alertas':             alertas,
     }

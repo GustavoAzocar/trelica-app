@@ -34,9 +34,9 @@ def carregar_catalogo(caminho=None) -> pd.DataFrame:
     return df.sort_values('A_m2').reset_index(drop=True)
 
 
-def _uc_barra(N, A, r, L, E, param_norma, D_t=None):
+def _ff_barra(N, A, r, L, E, param_norma, D_t=None):
     """
-    Taxa de utilização (UC) de uma barra usando propriedades reais do catálogo.
+    Fator de falha (FF) de uma barra usando propriedades reais do catálogo.
 
     Usa r fornecido diretamente (do catálogo) em vez da fórmula analítica.
     Quando D_t (D/t real do perfil) é fornecido, aplica redução Q por
@@ -65,14 +65,14 @@ def snap_discreto(
 ) -> dict:
     """
     Snap discreto pós-otimização: mapeia cada grupo de barras para o menor
-    perfil comercial do catálogo que satisfaz UC ≤ 1,0 (NBR 8800 / NBR 16239).
+    perfil comercial do catálogo que satisfaz FF ≤ 1,0 (NBR 8800 / NBR 16239).
 
     Algoritmo (Fase A)
     ------------------
     Para cada grupo de barras:
       1. Inicia pelo menor perfil com A ≥ max(A_contínua do grupo).
       2. Re-executa FEA com todas as áreas snappadas simultaneamente.
-      3. Verifica UC usando as propriedades reais do catálogo (r_cm do perfil).
+      3. Verifica FF usando as propriedades reais do catálogo (r_cm do perfil).
       4. Se alguma barra reprovar, avança para o próximo perfil e repete.
       5. Para quando todos os grupos aprovam ou o catálogo se esgota.
 
@@ -97,7 +97,7 @@ def snap_discreto(
         'dados_discretos'   : TrelicaInput com áreas do catálogo [m²]
         'perfis_grupos'     : dict[str, pd.Series]  — perfil por grupo nomeado
         'perfis_por_barra'  : list[str]             — designação por índice de barra
-        'UC_por_barra'      : np.ndarray            — taxa de utilização final
+        'FF_por_barra'      : np.ndarray            — fator de falha final
         'resultado_fea'     : dict                  — FEA com áreas snappadas
         'volume_discreto'   : float [m³]
         'massa_total_kg'    : float [kg]
@@ -146,7 +146,7 @@ def snap_discreto(
         res_fea    = analise_fea(dados_snap)
         N          = res_fea['forcas_internas']
 
-        # Verifica UC e promove grupos reprovados
+        # Verifica FF e promove grupos reprovados
         algum_reprovado = False
         for nome, idxs in grupos_ef.items():
             perfil = catalogo.loc[idx_cat[nome]]
@@ -158,7 +158,7 @@ def snap_discreto(
 
             for i in idxs:
                 E_i = float(E_arr) if np.ndim(E_arr) == 0 else float(E_arr[i])
-                uc  = _uc_barra(N[i], A_cat, r_cat, L_arr[i], E_i, param_norma,
+                uc  = _ff_barra(N[i], A_cat, r_cat, L_arr[i], E_i, param_norma,
                                 D_t=D_t_cat)
                 if uc > 1.0:
                     if idx_cat[nome] < len(catalogo) - 1:
@@ -173,7 +173,7 @@ def snap_discreto(
     areas_fin        = dados.areas.copy()
     perfis_grupos    = {}
     perfis_por_barra = [''] * n_el
-    UC_por_barra     = np.zeros(n_el)
+    FF_por_barra     = np.zeros(n_el)
 
     for nome, idxs in grupos_ef.items():
         perfil  = catalogo.loc[idx_cat[nome]]
@@ -186,7 +186,7 @@ def snap_discreto(
             areas_fin[i]        = A_cat
             perfis_por_barra[i] = str(perfil['designacao'])
             E_i = float(E_arr) if np.ndim(E_arr) == 0 else float(E_arr[i])
-            UC_por_barra[i] = _uc_barra(N[i], A_cat, r_cat, L_arr[i], E_i,
+            FF_por_barra[i] = _ff_barra(N[i], A_cat, r_cat, L_arr[i], E_i,
                                          param_norma, D_t=D_t_cat)
         if not nome.startswith('_solo_'):
             perfis_grupos[nome] = perfil
@@ -206,7 +206,7 @@ def snap_discreto(
         'dados_discretos':  dados_disc,
         'perfis_grupos':    perfis_grupos,
         'perfis_por_barra': perfis_por_barra,
-        'UC_por_barra':     UC_por_barra,
+        'FF_por_barra':     FF_por_barra,
         'resultado_fea':    res_fea_fin,
         'volume_discreto':  res_fea_fin['volume'],
         'massa_total_kg':   massa,
