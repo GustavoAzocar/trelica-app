@@ -10,6 +10,23 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.9.11] — 2026-09-11
+
+### Adicionado
+- **`.trelica` passa a salvar todas as opções de ☰ Configurar Análise**, não
+  só o modelo da treliça e δ_adm. Bloco `_meta` agora inclui:
+  - `param_norma`: fy, fu, E, γa1, γa2, k_flambagem, curva, tipo_secao,
+    beta_td, beta_td_shs (abas Norma/Material/Seção)
+  - `esbeltez_ativo` / `esbeltez_max` (restrição k·L/r)
+  - `geom_ativo` / `geom_nos` / `geom_delta_x` / `geom_delta_y` (aba Geometria)
+  - (já existiam desde v0.9.10: `meia_trelica`, `desl_ativo`, `desl_n`)
+  - `cmd_abrir_projeto` restaura tudo automaticamente; leitura tolerante a
+    campos ausentes/arquivos antigos (mantém os defaults de `ParamNorma()`).
+  - Objetivo: reabrir um `.trelica` reproduz fielmente o cálculo de origem,
+    sem precisar reconfigurar manualmente material/norma/restrições.
+
+---
+
 ## [0.9.10] — 2026-09-10
 
 ### Corrigido

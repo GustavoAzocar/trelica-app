@@ -2261,9 +2261,31 @@ class TrussApp(tk.Tk):
             return
         data = {key: df.to_dict(orient='records') for key, df in self.dfs.items()}
         data['_meta'] = {
-            'meia_trelica': bool(self._var_meia_trelica.get()),
-            'desl_ativo':   bool(self._var_desl_ativo.get()),
-            'desl_n':       self._var_desl_n.get(),
+            # Modelo da treliça e restrição de flecha
+            'meia_trelica':   bool(self._var_meia_trelica.get()),
+            'desl_ativo':     bool(self._var_desl_ativo.get()),
+            'desl_n':         self._var_desl_n.get(),
+            # Restrição de esbeltez
+            'esbeltez_ativo': bool(self._var_esbeltez_ativo.get()),
+            'esbeltez_max':   self._var_esbeltez_max.get(),
+            # Otimização de forma (aba Geometria)
+            'geom_ativo':     bool(self._var_geom_ativo.get()),
+            'geom_nos':       self._var_geom_nos.get(),
+            'geom_delta_x':   self._var_geom_delta_x.get(),
+            'geom_delta_y':   self._var_geom_delta_y.get(),
+            # Parâmetros de norma / material / seção (aba Configurações)
+            'param_norma': {
+                'fy':          self._param_norma.fy,
+                'fu':          self._param_norma.fu,
+                'E':           self._param_norma.E,
+                'gama_a1':     self._param_norma.gama_a1,
+                'gama_a2':     self._param_norma.gama_a2,
+                'k_flambagem': self._param_norma.k_flambagem,
+                'curva':       self._param_norma.curva,
+                'tipo_secao':  self._param_norma.tipo_secao,
+                'beta_td':     self._param_norma.beta_td,
+                'beta_td_shs': self._param_norma.beta_td_shs,
+            },
         }
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
@@ -2289,13 +2311,46 @@ class TrussApp(tk.Tk):
             if key in data:
                 self.dfs[key] = pd.DataFrame(data[key])
 
-        # Metadados de projeto (modelo da treliça e verificação de flecha)
+        # Metadados de projeto — modelo da treliça, restrições e parâmetros
+        # de norma/material/seção, para reproduzir fielmente o cálculo.
         meta = data.get('_meta', {}) or {}
         self._var_meia_trelica.set(bool(meta.get('meia_trelica', False)))
         if 'desl_ativo' in meta:
             self._var_desl_ativo.set(bool(meta['desl_ativo']))
         if meta.get('desl_n'):
             self._var_desl_n.set(str(meta['desl_n']))
+        if 'esbeltez_ativo' in meta:
+            self._var_esbeltez_ativo.set(bool(meta['esbeltez_ativo']))
+        if meta.get('esbeltez_max'):
+            self._var_esbeltez_max.set(str(meta['esbeltez_max']))
+        if 'geom_ativo' in meta:
+            self._var_geom_ativo.set(bool(meta['geom_ativo']))
+        if 'geom_nos' in meta:
+            self._var_geom_nos.set(str(meta.get('geom_nos', '')))
+        if meta.get('geom_delta_x'):
+            self._var_geom_delta_x.set(str(meta['geom_delta_x']))
+        if meta.get('geom_delta_y'):
+            self._var_geom_delta_y.set(str(meta['geom_delta_y']))
+
+        pn = meta.get('param_norma')
+        if pn:
+            from truss_norma import ParamNorma
+            base = ParamNorma()
+            try:
+                self._param_norma = ParamNorma(
+                    fy          = float(pn.get('fy',          base.fy)),
+                    fu          = float(pn.get('fu',          base.fu)),
+                    E           = float(pn.get('E',           base.E)),
+                    gama_a1     = float(pn.get('gama_a1',     base.gama_a1)),
+                    gama_a2     = float(pn.get('gama_a2',     base.gama_a2)),
+                    k_flambagem = float(pn.get('k_flambagem', base.k_flambagem)),
+                    curva       = str(pn.get('curva',         base.curva)),
+                    tipo_secao  = str(pn.get('tipo_secao',    base.tipo_secao)),
+                    beta_td     = float(pn.get('beta_td',     base.beta_td)),
+                    beta_td_shs = float(pn.get('beta_td_shs', base.beta_td_shs)),
+                )
+            except (TypeError, ValueError):
+                pass   # mantém self._param_norma atual se o bloco vier corrompido
 
         # Migração: area_m2/E_Pa → area_cm2/E_GPa (arquivos pré-v0.8)
         sec = self.dfs['secoes']
