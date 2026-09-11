@@ -10,6 +10,49 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.9.10] — 2026-09-10
+
+### Corrigido
+- **Flecha admissível δ_adm calculada para meia treliça** (reportado por Emily e Augusto):
+  em `cmd_otimizar`, `span` era `x_max − x_min` do modelo. Quando a treliça é
+  modelada **pela metade** (simetria no centro do vão), esse valor é L/2, então
+  `δ_adm = span/n` saía pela metade do correto — restrição ~2× mais rígida.
+  Agora o vão de referência é sempre o **vão cheio L**: novo helper
+  `_vao_referencia(dados)` retorna `2 × extensão_X` quando o modelo é meia treliça.
+- **`truss_engine.py` — restrição de deslocamento passa a ser só flecha vertical**:
+  `restricao_deslocamento_adm` usava `max(|u|)` sobre todos os GDL (incluindo
+  deslocamento horizontal no apoio de rolete). Agora usa `max(|u_y|)` (GDL
+  verticais, `u[1::2]`) — é o que a Tabela C.1 da NBR 8800 limita.
+- **`truss_gui.py:963` — `NameError: n_el`** no messagebox de "Dimensionar
+  Estrutura" (variável indefinida) → `dados.n_el`.
+- **`truss_gui.py:1051` — `AttributeError: 'TrussApp' object has no attribute
+  'root'`** em `_mostrar_ff_chart` (`tk.Toplevel(self.root)` → `tk.Toplevel(self)`).
+  Esses dois últimos travavam todo o fluxo de dimensionamento/otimização.
+
+### Adicionado
+- **Seletor "Modelo da treliça" na etapa 1 (Inserir Coordenadas)**: dois
+  radio-buttons — *Treliça inteira* / *Metade da treliça (simetria)* — visíveis
+  no fluxo de lançamento, pois é dado de projeto que impacta o resultado.
+  Persistido no `.trelica` (`_meta.meia_trelica`), junto de `desl_ativo`/`desl_n`.
+- **Eco do modelo na aba Restrições** (☰ Configurar Análise): mostra em texto
+  qual modelo está ativo e lembra que δ_adm é sempre referido ao vão cheio.
+- **Verificação de flecha vertical na etapa 8 (Dimensionar)**: o messagebox e a
+  barra de status passam a exibir `δy,máx` vs `δ_adm = L/n` (com δy/δ_adm e
+  OK/EXCEDE) quando a restrição de deslocamento está ativada; caso contrário,
+  informa apenas `δy,máx`.
+
+### Alterado
+- Denominador padrão de `δ_adm` passa de **L/300 → L/250** (NBR 8800 Anexo C,
+  treliça de cobertura). Campo continua editável na aba Restrições.
+- Aba Restrições: checkbox renomeado para "Limitar flecha vertical máxima
+  (δy ≤ δ_adm)"; label do campo agora cita a referência normativa.
+
+### Pendências resolvidas nesta versão
+- [x] ~~δ_adm errado para modelos de meia treliça~~
+- [x] ~~Restrição de deslocamento considerando GDL horizontais~~
+
+---
+
 ## [0.9.9] — 2026-05-07
 
 ### Alterado (terminologia e labels da GUI)

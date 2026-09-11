@@ -580,8 +580,11 @@ class ConfigOtimizacao:
     metodo : str
         Método do scipy.optimize.minimize. Padrão: 'SLSQP'.
     restricao_deslocamento_adm : float ou None
-        Deslocamento máximo admissível [m]. Se definido: max(|u|) ≤ δ_adm.
-        Sugestão: span / 300 para uso geral (treliças de cobertura).
+        Flecha vertical máxima admissível [m]. Se definido: max(|u_y|) ≤ δ_adm,
+        considerando apenas os GDL verticais (u_y) de todos os nós.
+        Referência: NBR 8800 Anexo C — treliça de cobertura → L/250, com L
+        igual ao VÃO CHEIO da treliça (se o modelo for meia treliça por
+        simetria, a GUI passa δ_adm = (2·extensão_X) / n).
     restricao_esbeltez_max : float ou None
         Esbeltez máxima k·L/r por barra. NBR 8800:2024 item 5.3.2: ≤ 200.
         Requer param_norma (usa k_flambagem e raio_giracao).
@@ -610,8 +613,8 @@ class ConfigOtimizacao:
 
     # ── Restrições de projeto ─────────────────────────────────────────────────
     restricao_deslocamento_adm: float = None
-    # Se definido: max(|u|) ≤ restricao_deslocamento_adm [m]
-    # Sugestão: span / 300  (vão / 300 para uso geral em treliças de cobertura)
+    # Se definido: max(|u_y|) ≤ restricao_deslocamento_adm [m]  (só flecha vertical)
+    # Sugestão: L / 250  (NBR 8800 Anexo C — treliça de cobertura), L = vão cheio
 
     restricao_esbeltez_max: float = None
     # Se definido: k·L/r ≤ restricao_esbeltez_max por barra
@@ -752,12 +755,15 @@ def otimizar(dados: TrelicaInput, config: ConfigOtimizacao,
                 return 1.0 - abs(N_el) / nc
             constraints.append({'type': 'ineq', 'fun': _cc})
 
-    # --- Restrição de deslocamento máximo: max(|u|) ≤ δ_adm ---
+    # --- Restrição de flecha vertical: max(|u_y|) ≤ δ_adm ---
+    # Só os GDL verticais (u_y = índices ímpares do vetor de deslocamentos).
+    # É o que a Tabela C.1 da NBR 8800 limita; o deslocamento horizontal no
+    # apoio de rolete não deve contaminar a verificação de serviço.
     if config.restricao_deslocamento_adm is not None:
         _delta_adm = config.restricao_deslocamento_adm
         def _rest_desl(x, _d=_delta_adm):
             u = analise_fea(reconstruir_dados(x))['deslocamentos'].ravel()
-            return _d - float(np.abs(u).max())
+            return _d - float(np.abs(u[1::2]).max())
         constraints.append({'type': 'ineq', 'fun': _rest_desl})
 
     # --- Restrição de esbeltez máxima: k·L/r ≤ restricao_esbeltez_max por barra ---

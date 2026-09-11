@@ -231,9 +231,14 @@ class TrussApp(tk.Tk):
 
         # Restrições de otimização (configuradas em cmd_param_norma, lidas em cmd_otimizar)
         self._var_desl_ativo     = tk.BooleanVar(value=False)
-        self._var_desl_n         = tk.StringVar(value='300')
+        self._var_desl_n         = tk.StringVar(value='250')   # NBR 8800 Anexo C: treliça de cobertura
         self._var_esbeltez_ativo = tk.BooleanVar(value=False)
         self._var_esbeltez_max   = tk.StringVar(value='200')
+
+        # Modelo da treliça: se True, a geometria lançada é METADE da treliça
+        # (modelada por simetria) → o vão real é 2× a extensão em X.
+        # Afeta a verificação de flecha δ_adm (etapas 8 e 9).
+        self._var_meia_trelica   = tk.BooleanVar(value=False)
 
         # Otimização de forma (geometria) — nós livres e bounds
         self._var_geom_ativo   = tk.BooleanVar(value=False)
@@ -564,6 +569,22 @@ class TrussApp(tk.Tk):
             self.dfs['nos'],
             titulo='Coordenadas dos Nós  —  id_no | x (m) | y (m)',
         )
+
+        # Modelo da treliça — impacta a verificação de flecha (δ_adm).
+        # Fica aqui (e não escondido nas configurações) por ser dado de projeto.
+        frm_modelo = ttk.LabelFrame(
+            self.content,
+            text=' Modelo da treliça  —  usado na verificação de flecha (δ_adm) ')
+        frm_modelo.pack(fill='x', padx=8, pady=(0, 6), before=sheet)
+        ttk.Radiobutton(
+            frm_modelo, text='Treliça inteira (vão completo lançado)',
+            variable=self._var_meia_trelica, value=False
+        ).pack(anchor='w', padx=6, pady=(2, 1))
+        ttk.Radiobutton(
+            frm_modelo,
+            text='Metade da treliça (modelada por simetria)  —  vão real = 2× a extensão em X',
+            variable=self._var_meia_trelica, value=True
+        ).pack(anchor='w', padx=6, pady=(1, 3))
 
         def salvar():
             df = _read_sheet(sheet,
@@ -946,9 +967,48 @@ class TrussApp(tk.Tk):
         W = float(res['compliance'])
         V = dados.volume_total()
 
+        # ── Verificação de flecha vertical (estado-limite de serviço) ──────
+        flecha_txt = ''
+        flecha_status = ''
+        u_all = res['deslocamentos'].ravel()
+        dy_max = float(np.abs(u_all[1::2]).max())
+        if self._var_desl_ativo.get():
+            try:
+                n_d = float(self._var_desl_n.get())
+            except ValueError:
+                n_d = 0.0
+            if n_d > 0:
+                vao_ref, meia = self._vao_referencia(dados)
+                d_adm = vao_ref / n_d
+                ok    = dy_max <= d_adm
+                razao = dy_max / d_adm if d_adm > 0 else float('inf')
+                flecha_txt = (
+                    "\n\n── Flecha vertical (serviço) ────────\n"
+                    f"δy,máx = {dy_max*1e3:.2f} mm   |   "
+                    f"δ_adm = L/{n_d:.0f} = {d_adm*1e3:.2f} mm "
+                    f"({'½ treliça — L = 2× ext. X' if meia else 'treliça inteira'})\n"
+                    + ('✓ OK' if ok else '✗ EXCEDE')
+                    + f"   (δy/δ_adm = {razao:.2f})"
+                )
+                flecha_status = (
+                    f"  |  δy = {dy_max*1e3:.1f} mm "
+                    f"({'OK' if ok else 'EXCEDE'} L/{n_d:.0f})"
+                )
+            else:
+                flecha_txt = (
+                    f"\n\nFlecha vertical: δy,máx = {dy_max*1e3:.2f} mm "
+                    "(defina δ_adm em ☰ Configurar Análise ▸ Restrições)"
+                )
+        else:
+            flecha_txt = (
+                f"\n\nFlecha vertical: δy,máx = {dy_max*1e3:.2f} mm "
+                "(verificação δ_adm desativada)"
+            )
+
         self._set_status(
             f"Dimensionamento concluído  |  FF máx = {norma['FF_global']:.3f}  "
-            f"| Barras reprovadas: {reprovadas}  |  V = {V*1e6:.2f} cm³")
+            f"| Barras reprovadas: {reprovadas}  |  V = {V*1e6:.2f} cm³"
+            + flecha_status)
         messagebox.showinfo(
             "Dimensionamento concluído",
             f"Compliance:          {W:.4e} J\n"
@@ -960,8 +1020,9 @@ class TrussApp(tk.Tk):
             f"Seção: {self._param_norma.tipo_secao}\n\n"
             f"FF global (pior barra): {norma['FF_global']:.3f}  "
             + ('✓ OK' if norma['FF_global'] <= 1.0 else '✗ REPROVADO')
-            + f"\nBarras reprovadas: {reprovadas} / {n_el}"
+            + f"\nBarras reprovadas: {reprovadas} / {dados.n_el}"
             + alertas_txt
+            + flecha_txt
             + "\n\nSalvo como benchmark para a otimização."
         )
 
@@ -987,7 +1048,7 @@ class TrussApp(tk.Tk):
 
     def _mostrar_ff_chart(self, norma, n_el: int):
         """Abre Toplevel com gráfico de barras de FF por barra (matplotlib)."""
-        top = tk.Toplevel(self.root)
+        top = tk.Toplevel(self)
         top.title("Fator de Falha por Barra")
         top.geometry("750x340")
 
@@ -1406,15 +1467,16 @@ class TrussApp(tk.Tk):
         A_min = max(dados.areas.min() * 0.3, 1e-4)
         A_max = dados.areas.max() * 3.0
 
-        # Restrição δ_adm
+        # Restrição δ_adm — flecha vertical referida ao vão CHEIO
         n_desl    = 0.0
         delta_adm = None
+        meia_mod  = self._var_meia_trelica.get()
         if self._var_desl_ativo.get():
             try:
                 n_desl = float(self._var_desl_n.get())
                 if n_desl > 0:
-                    span      = float(dados.nos[:, 0].max() - dados.nos[:, 0].min())
-                    delta_adm = span / n_desl
+                    vao_ref, meia_mod = self._vao_referencia(dados)
+                    delta_adm = vao_ref / n_desl
             except ValueError:
                 pass
 
@@ -1487,7 +1549,10 @@ class TrussApp(tk.Tk):
                 f'  ΔX=±{geom_dx:.2f}m  ΔY=±{geom_dy:.2f}m'
             )
         if delta_adm is not None:
-            self._log_append(f'  δ_adm: L/{n_desl:.0f} = {delta_adm*1e3:.1f} mm')
+            _tag = '  (½ treliça: L = 2× extensão em X)' if meia_mod else ''
+            self._log_append(
+                f'  δ_adm (flecha vertical): L/{n_desl:.0f} = '
+                f'{delta_adm*1e3:.1f} mm{_tag}')
         if esbeltez_max is not None:
             self._log_append(f'  kL/r ≤ {esbeltez_max:.0f}')
         self._log_append('─' * 32)
@@ -1741,6 +1806,20 @@ class TrussApp(tk.Tk):
             return False
         return True
 
+    def _vao_referencia(self, dados):
+        """
+        Vão de referência L para a flecha admissível δ_adm = L / n.
+
+        δ_adm é sempre referido ao VÃO CHEIO da treliça. Se o usuário modelou
+        apenas metade da treliça (simetria), a extensão em X do modelo é L/2,
+        então o vão real é o dobro.
+
+        Retorna (L [m], meia_trelica [bool]).
+        """
+        ext_x = float(dados.nos[:, 0].max() - dados.nos[:, 0].min())
+        meia  = bool(self._var_meia_trelica.get())
+        return (ext_x * 2.0 if meia else ext_x), meia
+
     def _montar_trelica(self):
         """Converte DataFrames → TrelicaInput com tratamento de erro."""
         try:
@@ -1766,7 +1845,7 @@ class TrussApp(tk.Tk):
         win = tk.Toplevel(self)
         win.title("Configurações de Análise")
         win.resizable(False, False)
-        win.geometry("520x420")
+        win.geometry("540x470")
         win.grab_set()   # modal
 
         nb = ttk.Notebook(win)
@@ -1907,38 +1986,49 @@ class TrussApp(tk.Tk):
         ttk.Separator(frm_rest, orient='horizontal').grid(
             row=1, column=0, columnspan=3, sticky='ew', pady=(0, 6))
 
-        ttk.Checkbutton(frm_rest, text='Limitar deslocamento máximo',
+        ttk.Checkbutton(frm_rest,
+                        text='Limitar flecha vertical máxima  (δy ≤ δ_adm)',
                         variable=self._var_desl_ativo).grid(
                         row=2, column=0, columnspan=3, sticky='w')
-        ttk.Label(frm_rest, text='   δ_adm = vão / ').grid(
+        ttk.Label(frm_rest, text='   δ_adm = vão L / ').grid(
                   row=3, column=0, sticky='e', padx=(20, 2), pady=4)
         ttk.Entry(frm_rest, textvariable=self._var_desl_n, width=7).grid(
                   row=3, column=1, sticky='w')
-        ttk.Label(frm_rest, text='(ex: 250, 300, 400)',
+        ttk.Label(frm_rest, text='NBR 8800 Anexo C: treliça de cobertura → L/250',
                   foreground='gray', font=('Segoe UI', 8)).grid(
                   row=3, column=2, sticky='w', padx=6)
 
+        _modelo_txt = ('metade da treliça (simetria) — L = 2× a extensão em X'
+                       if self._var_meia_trelica.get()
+                       else 'treliça inteira — L = extensão em X do modelo')
+        ttk.Label(frm_rest,
+                  text=f'Modelo atual: {_modelo_txt}.\n'
+                       'Altere em "1 Inserir Coordenadas". δ_adm é sempre '
+                       'referido ao vão CHEIO.',
+                  foreground='#555555', font=('Segoe UI', 8)).grid(
+                  row=4, column=0, columnspan=3, sticky='w', pady=(2, 0))
+
         ttk.Separator(frm_rest, orient='horizontal').grid(
-            row=4, column=0, columnspan=3, sticky='ew', pady=8)
+            row=5, column=0, columnspan=3, sticky='ew', pady=8)
 
         ttk.Checkbutton(frm_rest, text='Limitar esbeltez máxima  k·L/r',
                         variable=self._var_esbeltez_ativo).grid(
-                        row=5, column=0, columnspan=3, sticky='w')
+                        row=6, column=0, columnspan=3, sticky='w')
         ttk.Label(frm_rest, text='   k·L/r ≤ ').grid(
-                  row=6, column=0, sticky='e', padx=(20, 2), pady=4)
+                  row=7, column=0, sticky='e', padx=(20, 2), pady=4)
         ttk.Entry(frm_rest, textvariable=self._var_esbeltez_max, width=7).grid(
-                  row=6, column=1, sticky='w')
+                  row=7, column=1, sticky='w')
         ttk.Label(frm_rest, text='NBR 8800 item 5.3.2: ≤ 200',
                   foreground='gray', font=('Segoe UI', 8)).grid(
-                  row=6, column=2, sticky='w', padx=6)
+                  row=7, column=2, sticky='w', padx=6)
 
         ttk.Separator(frm_rest, orient='horizontal').grid(
-            row=7, column=0, columnspan=3, sticky='ew', pady=(8, 4))
+            row=8, column=0, columnspan=3, sticky='ew', pady=(8, 4))
 
         ttk.Label(frm_rest,
                   text='k e β utilizados: definidos nas abas Norma / Seção.',
                   foreground='gray', font=('Segoe UI', 8)).grid(
-                  row=8, column=0, columnspan=3, sticky='w')
+                  row=9, column=0, columnspan=3, sticky='w')
 
         # ── Aba: Geometria ────────────────────────────────────────────────
         frm_geom = ttk.Frame(nb, padding=12)
@@ -2058,7 +2148,10 @@ class TrussApp(tk.Tk):
             "═══════════════════════════════════════════════════════\n\n"
             "① Inserir Coordenadas\n"
             "   Informe cada nó com id, x e y (em metros).\n"
-            "   Os índices devem começar em 0 e ser sequenciais.\n\n"
+            "   Os índices devem começar em 0 e ser sequenciais.\n"
+            "   Marque se lançou a treliça INTEIRA ou apenas METADE\n"
+            "   (por simetria) — isso define o vão L usado na verificação\n"
+            "   de flecha δ_adm. Meia treliça → L = 2× a extensão em X.\n\n"
             "② Inserir Barras\n"
             "   Defina a conectividade: id da barra, nó inicial,\n"
             "   nó final, id da seção e uma descrição opcional.\n\n"
@@ -2081,7 +2174,8 @@ class TrussApp(tk.Tk):
             "   Exibe geometria + apoios + forças aplicadas.\n\n"
             "⑧ Dimensionar Estrutura\n"
             "   Executa a análise por Elementos Finitos (FEA).\n"
-            "   Exibe deslocamentos e esforços internos (N) por barra.\n\n"
+            "   Exibe esforços internos (N), FF por barra (NBR 8800) e a\n"
+            "   flecha vertical δy,máx vs δ_adm = L/250 (NBR 8800 Anexo C).\n\n"
             "⑨ Otimizar Estrutura\n"
             "   Minimiza o volume de aço (∝ massa e custo) sujeito a\n"
             "   restrições de resistência por barra (FF ≤ 1,0, NBR 8800).\n"
@@ -2166,6 +2260,11 @@ class TrussApp(tk.Tk):
         if not path:
             return
         data = {key: df.to_dict(orient='records') for key, df in self.dfs.items()}
+        data['_meta'] = {
+            'meia_trelica': bool(self._var_meia_trelica.get()),
+            'desl_ativo':   bool(self._var_desl_ativo.get()),
+            'desl_n':       self._var_desl_n.get(),
+        }
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         self._set_status(f"Projeto salvo em {path}")
@@ -2189,6 +2288,14 @@ class TrussApp(tk.Tk):
         for key in vazios:
             if key in data:
                 self.dfs[key] = pd.DataFrame(data[key])
+
+        # Metadados de projeto (modelo da treliça e verificação de flecha)
+        meta = data.get('_meta', {}) or {}
+        self._var_meia_trelica.set(bool(meta.get('meia_trelica', False)))
+        if 'desl_ativo' in meta:
+            self._var_desl_ativo.set(bool(meta['desl_ativo']))
+        if meta.get('desl_n'):
+            self._var_desl_n.set(str(meta['desl_n']))
 
         # Migração: area_m2/E_Pa → area_cm2/E_GPa (arquivos pré-v0.8)
         sec = self.dfs['secoes']

@@ -403,18 +403,30 @@
   "secoes": [
     {
       "id_secao": 0,
-      "area_m2": 0.000518,
-      "E_Pa": 210000000000.0
+      "designacao": "",
+      "D_mm": NaN,
+      "t_mm": NaN,
+      "m_kg_m": NaN,
+      "area_cm2": 5.18,
+      "E_GPa": 210.0
     },
     {
       "id_secao": 1,
-      "area_m2": 0.000518,
-      "E_Pa": 210000000000.0
+      "designacao": "",
+      "D_mm": NaN,
+      "t_mm": NaN,
+      "m_kg_m": NaN,
+      "area_cm2": 5.18,
+      "E_GPa": 210.0
     },
     {
       "id_secao": 2,
-      "area_m2": 0.000518,
-      "E_Pa": 210000000000.0
+      "designacao": "",
+      "D_mm": NaN,
+      "t_mm": NaN,
+      "m_kg_m": NaN,
+      "area_cm2": 5.18,
+      "E_GPa": 210.0
     }
   ],
   "forcas": [
@@ -477,13 +489,23 @@
   "apoios": [
     {
       "id_no": 0,
-      "restrito_x": 1,
+      "restrito_x": 0,
       "restrito_y": 1
     },
     {
       "id_no": 20,
-      "restrito_x": 0,
-      "restrito_y": 1
+      "restrito_x": 1,
+      "restrito_y": 0
+    },
+    {
+      "id_no": 21,
+      "restrito_x": 1,
+      "restrito_y": 0
     }
-  ]
+  ],
+  "_meta": {
+    "meia_trelica": true,
+    "desl_ativo": false,
+    "desl_n": "250"
+  }
 }
