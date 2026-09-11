@@ -505,7 +505,7 @@
   ],
   "_meta": {
     "meia_trelica": true,
-    "desl_ativo": false,
+    "desl_ativo": true,
     "desl_n": "250"
   }
 }
