@@ -10,6 +10,28 @@ Versionamento: `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.9.12] — 2026-10-02
+
+### Corrigido
+- **FF (Fator de Falha) não aparecia no hover da treliça OTIMIZADA** (reportado
+  por Emily e Augusto, por vídeo): no "Dimensionar" (inicial) e após "Otimizar
+  Perfil Comercial" (snap), passar o mouse sobre uma barra mostra `N` e
+  `FF = x.xxx ✓/✗` no tooltip. No resultado do **"9 Otimizar Estrutura"**
+  (contínuo, antes do snap) só aparecia `N` — faltava a verificação normativa
+  no `res_fea` montado em `_otim_concluido`.
+  - Causa: `res_fea = analise_fea(dados_opt)` não chamava `verificar_barras`,
+    então `TrussCanvas._hit_test` não encontrava a chave `'norma'` no
+    resultado e omitia a linha de FF (ela já checava essa chave — o problema
+    era a chave nunca ter sido gravada para o otimizado contínuo).
+  - Correção: `_otim_concluido` agora grava
+    `res_fea['norma'] = verificar_barras(dados_opt, res_fea, self._param_norma)`,
+    igual já era feito em `cmd_dimensionar` e `_aceitar_snap`. Como
+    `self._res_fea_otimizado` é a única fonte usada pelos painéis "Otimizado —
+    Esforços" (em `_otim_concluido`, `cmd_resultados` e `_aceitar_snap`), a
+    correção cobre os três lugares de uma vez.
+
+---
+
 ## [0.9.11] — 2026-09-11
 
 ### Adicionado

@@ -1609,6 +1609,14 @@ class TrussApp(tk.Tk):
         self.resultado_otimizado = res_opt
         dados_opt = res_opt['dados_otimizados']
         res_fea   = analise_fea(dados_opt)
+
+        # Verificação normativa também no resultado otimizado (continuo) —
+        # sem isso, o FF só aparecia no inicial e após o snap em perfil
+        # comercial; o otimizado ficava sem indicação de falha no hover
+        # (reportado por Emily/Augusto).
+        from truss_norma import verificar_barras
+        res_fea['norma'] = verificar_barras(dados_opt, res_fea, self._param_norma)
+
         self._res_fea_otimizado = res_fea
 
         # Quatro painéis Canvas 2×2: esforços e croqui, inicial e otimizado
