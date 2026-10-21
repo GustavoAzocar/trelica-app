@@ -4,7 +4,7 @@
 PIBIC — UNESC | Programa de Iniciação Científica
 
 > Desenvolvido por **Gustavo Azocar** com colaboração de Emily e assistência de Claude (Anthropic).  
-> Orientação: Msc. Eng Augusto Warmiling — UNESC — Engenharia Civil.
+> Orientação: Msc. Eng Augusto Wanderlind — UNESC — Engenharia Civil.
 
 ---
 
