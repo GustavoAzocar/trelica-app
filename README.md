@@ -11,7 +11,7 @@ PIBIC — UNESC | Programa de Iniciação Científica
 ## Sobre o projeto
 
 Aplicação desktop para análise, dimensionamento e otimização de treliças planas 2D,
-com verificação normativa segundo a **NBR 8800:2024** e **NBR 16239:2013** (perfis CHS).
+com verificação normativa segundo a **NBR 8800:2008** e **NBR 16239:2013** (perfis CHS).
 
 O fluxo de trabalho vai do lançamento geométrico até o snap discreto em catálogo comercial
 (perfis tubulares circulares Vallourec), passando por FEA, SLSQP e verificação de UC por barra.
